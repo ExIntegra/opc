@@ -25,8 +25,8 @@ void tick100ms_cb(UA_Server* server, void* ctx) {
     ControlLoop* cashLoop = (ControlLoop*)ctx;
     (void)server;
     UA_DateTimeStruct t = UA_DateTime_toStruct(UA_DateTime_now());
-    printf("%02u:%02u:%02u.%03u\n",
-        (unsigned)t.hour, (unsigned)t.min, (unsigned)t.sec, (unsigned)t.milliSec);
+    //printf("%02u:%02u:%02u.%03u\n",
+        //(unsigned)t.hour, (unsigned)t.min, (unsigned)t.sec, (unsigned)t.milliSec);
     daq_tick(&cashLoop->cash);
 
     /* 2) если чтение успешное — обновляем PV для pid1 и считаем выход */

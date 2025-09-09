@@ -7,6 +7,7 @@ typedef struct {
     UA_Double ki;
     UA_Double kd;
     UA_Double output;
+    UA_Double manualoutput;
     UA_Double setpoint;
     UA_Double processvalue;
     UA_Double integral;

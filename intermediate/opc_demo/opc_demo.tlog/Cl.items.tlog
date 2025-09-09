@@ -1,0 +1,8 @@
+C:\Users\ilyak\source\repos\opc_demo\opc_demo\config.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\config.obj
+C:\Users\ilyak\source\repos\opc_demo\opc_demo\DAQ.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\DAQ.obj
+C:\Users\ilyak\source\repos\opc_demo\opc_demo\opcuaSettings.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\opcuaSettings.obj
+C:\Users\ilyak\source\repos\opc_demo\opc_demo\pidCalculate.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\pidCalculate.obj
+C:\Users\ilyak\source\repos\opc_demo\opc_demo\sensorsAddress.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\sensorsAddress.obj
+C:\Users\ilyak\source\repos\opc_demo\opc_demo\sensorsRead.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\sensorsRead.obj
+C:\Users\ilyak\source\repos\opc_demo\opc_demo\main.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\main.obj
+C:\Users\ilyak\source\repos\opc_demo\opc_demo\servo.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\servo.obj

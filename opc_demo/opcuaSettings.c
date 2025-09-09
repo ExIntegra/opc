@@ -3,13 +3,13 @@
 
 static UA_StatusCode
 readDoubleDS(UA_Server* server,
-    const UA_NodeId* sessionId,
-    void* sessionContext,
-    const UA_NodeId* nodeId,
-    void* nodeContext,
-    UA_Boolean includeSourceTimeStamp,
-    const UA_NumericRange* range,
-    UA_DataValue* out) {
+             const UA_NodeId* sessionId,
+             void* sessionContext,
+             const UA_NodeId* nodeId,
+             void* nodeContext,
+             UA_Boolean includeSourceTimeStamp,
+             const UA_NumericRange* range,
+             UA_DataValue* out) {
 
     (void)server;
     (void)sessionId;
@@ -61,12 +61,12 @@ readDoubleDS(UA_Server* server,
  * с компонентами экземпляра PID (kp, ki, kd, output, setPoint, processValue)*/
 static UA_StatusCode
 writeDoubleDS(UA_Server* server,
-    const UA_NodeId* sessionId,
-    void* sessionContext,
-    const UA_NodeId* nodeId,
-    void* nodeContext,
-    const UA_NumericRange* range,
-    const UA_DataValue* data) {
+              const UA_NodeId* sessionId,
+              void* sessionContext,
+              const UA_NodeId* nodeId,
+              void* nodeContext,
+              const UA_NumericRange* range,
+              const UA_DataValue* data) {
 
     (void)server;
     (void)sessionId;
@@ -99,19 +99,93 @@ writeDoubleDS(UA_Server* server,
 
 static UA_StatusCode
 writeBoolDS(UA_Server* server,
-    const UA_NodeId* sessionId, void* sessionContext,
-    const UA_NodeId* nodeId, void* nodeContext,
-    const UA_NumericRange* range,
-    const UA_DataValue* data) {
+            const UA_NodeId* sessionId, void* sessionContext,
+            const UA_NodeId* nodeId, void* nodeContext,
+            const UA_NumericRange* range,
+            const UA_DataValue* data) {
+
+    (void)server;
+    (void)sessionId;
+    (void)sessionContext;
+    (void)nodeId;
+
+    if (!nodeContext)
+        return UA_STATUSCODE_BADINTERNALERROR;
+
+    if (!data || !data->hasValue)
+        return UA_STATUSCODE_BADINVALIDARGUMENT;
+
+    if (range && range->dimensionsSize > 0)
+        return UA_STATUSCODE_BADINDEXRANGEINVALID;
+
+    if (data->value.type != &UA_TYPES[UA_TYPES_BOOLEAN] ||
+        data->value.data == NULL ||
+        data->value.arrayLength != 0 ||
+        data->value.arrayDimensionsSize != 0)
+        return UA_STATUSCODE_BADTYPEMISMATCH;
+
+    const UA_Boolean v = *(const UA_Boolean*)data->value.data;
+    if (!isfinite(v))
+        return UA_STATUSCODE_BADOUTOFRANGE;
+
+    /* Записываем по адресу, переданному через nodeContext */
+    *(bool*)nodeContext = v;
+
     return UA_STATUSCODE_GOOD;
 }
 
 static UA_StatusCode
 readBoolDS(UA_Server* server,
-    const UA_NodeId* sessionId, void* sessionContext,
-    const UA_NodeId* nodeId, void* nodeContext,
-    UA_Boolean sourceTimeStamp, const UA_NumericRange* range,
-    UA_DataValue* dataValue) {
+           const UA_NodeId* sessionId,
+           void* sessionContext,
+           const UA_NodeId* nodeId,
+           void* nodeContext,
+           UA_Boolean includeSourceTimeStamp,
+           const UA_NumericRange* range,
+           UA_DataValue* out) {
+
+    (void)server;
+    (void)sessionId;
+    (void)sessionContext;
+    (void)nodeId;
+
+    UA_DataValue_init(out);
+
+    if (!nodeContext) {
+        out->status = UA_STATUSCODE_BADINTERNALERROR;
+        out->hasStatus = true;
+        return out->status;
+    }
+
+    if (range && range->dimensionsSize > 0) {
+        out->status = UA_STATUSCODE_BADINDEXRANGEINVALID;
+        out->hasStatus = true;
+        return out->status;
+    }
+
+    /* Приодим nodeContext к типу double и разыменовываем указатель */
+    const boolean v = *(const boolean*)nodeContext;
+
+    UA_StatusCode rv = UA_Variant_setScalarCopy(&out->value, &v, &UA_TYPES[UA_TYPES_BOOLEAN]);
+    if (rv != UA_STATUSCODE_GOOD) {
+        out->status = rv;
+        out->hasStatus = true;
+        return rv;
+    }
+
+    out->hasValue = true;
+
+    if (includeSourceTimeStamp) {
+        out->sourceTimestamp = UA_DateTime_now();
+        out->hasSourceTimestamp = true;
+    }
+
+    out->serverTimestamp = UA_DateTime_now();
+    out->hasServerTimestamp = true;
+
+    out->status = UA_STATUSCODE_GOOD;
+    out->hasStatus = true;
+
     return UA_STATUSCODE_GOOD;
 }
 
@@ -171,7 +245,6 @@ static UA_StatusCode
 attachChild(UA_Server* server,
     const UA_NodeId parent,
     const char* browseName,
-    PIDControllerData* pid,
     void* ptrToField) {
 
     UA_NodeId childId = UA_NODEID_NULL;
@@ -200,6 +273,38 @@ attachChild(UA_Server* server,
     return UA_STATUSCODE_GOOD;
 }
 
+
+static UA_StatusCode
+attachChildBool(UA_Server* server,
+    const UA_NodeId parent,
+    const char* browseName,
+    void* ptrToField) {
+
+    UA_NodeId childId = UA_NODEID_NULL;
+
+    //находим узел и передаем его в chilId через указатель:
+    UA_StatusCode ret = findChildVar(server, parent, browseName, &childId);
+    if (ret != UA_STATUSCODE_GOOD) {
+        return ret;
+    }
+
+    ret = UA_Server_setNodeContext(server, childId, ptrToField);
+
+    // Устанавливаем DataSource.
+    UA_DataSource ds;
+    ds.read = readBoolDS;
+    ds.write = writeBoolDS;
+
+    //Привязка DS к узлу. 
+    ret = UA_Server_setVariableNode_dataSource(server, childId, ds);
+    if (ret != UA_STATUSCODE_GOOD) {
+        UA_Server_setNodeContext(server, childId, NULL); // Убираем контекст в случае ошибки привязки очистки контекста при удаление узла
+
+        return ret;
+    }
+
+    return UA_STATUSCODE_GOOD;
+}
 // Функция для добавления обязательных ссылок
 static UA_StatusCode
 addReferenceMandatory(UA_Server* server, UA_NodeId nodeId) {
@@ -208,13 +313,13 @@ addReferenceMandatory(UA_Server* server, UA_NodeId nodeId) {
         UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY),
         true);
 }
+UA_NodeId pidControllerTypeId = {1, UA_NODEIDTYPE_NUMERIC, { 1001 }};
 
-static UA_NodeId
-addPIDControllerType(UA_Server* server) {
+UA_NodeId addPIDControllerType(UA_Server* server) {
     UA_ObjectTypeAttributes varAttr = UA_ObjectTypeAttributes_default;
     varAttr.displayName = UA_LOCALIZEDTEXT("en-US", "PIDControllerType");
-    UA_NodeId pidControllerTypeId;
-    UA_Server_addObjectTypeNode(server, UA_NODEID_STRING(1, "PIDControllerType"),
+    UA_Server_addObjectTypeNode(server,
+        UA_NODEID_NUMERIC(1, 1001),
         UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
         UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
         UA_QUALIFIEDNAME(1, "PIDControllerType"),
@@ -231,7 +336,6 @@ addPIDControllerType(UA_Server* server) {
     addReferenceMandatory(server, pidNameId);
 
 
-
     UA_VariableAttributes kpAttr = UA_VariableAttributes_default;
     kpAttr.displayName = UA_LOCALIZEDTEXT("en-US", "KP");
     kpAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
@@ -239,12 +343,11 @@ addPIDControllerType(UA_Server* server) {
 
     UA_NodeId kpId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "KP"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        kpAttr, NULL, &kpId);
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+                              UA_QUALIFIEDNAME(1, "KP"),
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+                              kpAttr, NULL, &kpId);
     addReferenceMandatory(server, kpId);
-
 
 
     UA_VariableAttributes kiAttr = UA_VariableAttributes_default;
@@ -278,22 +381,35 @@ addPIDControllerType(UA_Server* server) {
     UA_VariableAttributes outputAttr = UA_VariableAttributes_default;
     outputAttr.displayName = UA_LOCALIZEDTEXT("en-US", "OUTPUT");
     outputAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    outputAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    outputAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
 
     UA_NodeId outputId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "OUTPUT"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        outputAttr, NULL, &outputId);
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+                              UA_QUALIFIEDNAME(1, "OUTPUT"),
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+                              outputAttr, NULL, &outputId);
     addReferenceMandatory(server, outputId);
+
+
+    UA_VariableAttributes manualOutputAttr = UA_VariableAttributes_default;
+    manualOutputAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MANUALOUTPUT");
+    manualOutputAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+    manualOutputAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+
+    UA_NodeId manualOutputValueId;
+    UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+        UA_QUALIFIEDNAME(1, "MANUALOUTPUT"),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+        manualOutputAttr, NULL, &manualOutputValueId);
+    addReferenceMandatory(server, manualOutputValueId);
 
 
     UA_VariableAttributes setPointAttr = UA_VariableAttributes_default;
     setPointAttr.displayName = UA_LOCALIZEDTEXT("en-US", "SETPOINT");
     setPointAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
     setPointAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-
 
     UA_NodeId setPointId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
@@ -307,7 +423,7 @@ addPIDControllerType(UA_Server* server) {
     UA_VariableAttributes processValueAttr = UA_VariableAttributes_default;
     processValueAttr.displayName = UA_LOCALIZEDTEXT("en-US", "PROCESSVALUE");
     processValueAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    processValueAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    processValueAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
 
 
     UA_NodeId processValueId;
@@ -334,4 +450,34 @@ addPIDControllerType(UA_Server* server) {
     addReferenceMandatory(server, modeId);
 
     return pidControllerTypeId;
+}
+
+
+/* Функция для создания объекта PID из типа PIDControllerType */
+UA_StatusCode opcua_create_pid_instance(UA_Server* server, const char* pidName, ControlLoop* loop) {
+    UA_NodeId pidObjId;
+    UA_StatusCode rc = UA_Server_addObjectNode(
+        server,
+        UA_NODEID_NULL,                                           // Генерация ID
+        UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),             // Родитель (ObjectsFolder)
+        UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),                 // Тип связи (Optional)
+        UA_QUALIFIEDNAME(1, (char*)pidName),                      // Имя PID (например PID1)
+        pidControllerTypeId,                                      // Тип объекта PIDControllerType
+        UA_ObjectAttributes_default, NULL, &pidObjId);            // Атрибуты по умолчанию
+    if (rc != UA_STATUSCODE_GOOD) {
+        printf("Failed to add object PID %s\n", pidName);
+        return rc;
+    }
+
+    /* 2) Привязываем переменные PID из объекта к полям структуры ControlLoop */
+    rc = attachChild(server, pidObjId, "KP", &loop->pid.kp); if (rc) return rc; 
+    rc = attachChild(server, pidObjId, "KI", &loop->pid.ki); if (rc) return rc;  
+    rc = attachChild(server, pidObjId, "KD",&loop->pid.kd); if (rc) return rc;  
+    rc = attachChild(server, pidObjId, "SETPOINT",&loop->pid.setpoint); if (rc) return rc; 
+    rc = attachChild(server, pidObjId, "PROCESSVALUE", &loop->pid.processvalue); if (rc) return rc;
+    rc = attachChild(server, pidObjId, "OUTPUT", &loop->pid.output); if (rc) return rc;
+    rc = attachChild(server, pidObjId, "MANUALOUTPUT", &loop->pid.manualoutput); if (rc) return rc;
+    rc = attachChildBool(server, pidObjId, "MODE", &loop->pid.mode); if (rc) return rc;        
+
+    return UA_STATUSCODE_GOOD;
 }
