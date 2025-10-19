@@ -1,5 +1,6 @@
 C:\Users\ilyak\source\repos\opc_demo\opc_demo\config.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\config.obj
 C:\Users\ilyak\source\repos\opc_demo\opc_demo\DAQ.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\DAQ.obj
+C:\Users\ilyak\source\repos\opc_demo\opc_demo\emergencyStop.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\emergencyStop.obj
 C:\Users\ilyak\source\repos\opc_demo\opc_demo\opcuaSettings.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\opcuaSettings.obj
 C:\Users\ilyak\source\repos\opc_demo\opc_demo\pidCalculate.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\pidCalculate.obj
 C:\Users\ilyak\source\repos\opc_demo\opc_demo\sensorsAddress.c;C:\Users\ilyak\source\repos\opc_demo\Intermediate\opc_demo\sensorsAddress.obj

@@ -1,6 +1,6 @@
 #pragma once
 #include <open62541/types.h>
-
+//!!!
 typedef struct {
     UA_String name;
     UA_Double kp;
@@ -15,7 +15,7 @@ typedef struct {
     UA_Boolean mode;
 } PIDControllerData;
 
-
+    
 static inline void PID_init(PIDControllerData* pid)
 {
     pid->kp = 0.0;
@@ -26,6 +26,8 @@ static inline void PID_init(PIDControllerData* pid)
     pid->integral = 0.0;
     pid->lastError = 0.0;
     pid->setpoint = 0.0;
+	pid->manualoutput = 0.0;
+    pid->mode = false; //???
 }
 
 void pidCalculate(PIDControllerData* pid);
