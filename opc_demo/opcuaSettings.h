@@ -7,6 +7,8 @@
 #include "pidCalculate.h"
 #include "DAQ.h"
 #include <stdio.h>
+#include <open62541/server_config_default.h>
+
 
 UA_NodeId addPIDControllerType(UA_Server* server);
 UA_NodeId addSensorType(UA_Server* server);

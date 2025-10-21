@@ -36,6 +36,7 @@ typedef struct {
     UA_Boolean highHigh;
 } AlarmState;
 
+/* --- Параметры клапана --- */
 typedef struct {
 	UA_String name;
     UA_NodeId objId;
@@ -44,15 +45,14 @@ typedef struct {
     UA_Double outMin;
     UA_Double outMax;
 
+    UA_Double command;
+	UA_Double actual;
+
     UA_UInt32 actionHH;
     UA_UInt32 actionLL;
     UA_Double safeOutputHH;
     UA_Double safeOutputLL;
-
-    UA_Double command;
-	UA_Double actual;
 } Valve;
-
 
 /* --- Кэш для хранения значения датчика и статуса прочтения --- */
 typedef struct {
@@ -60,6 +60,7 @@ typedef struct {
     UA_StatusCode st;     /* статус последнего чтения */
 } CashSensor;
 
+/* --- Параметры датчика --- */
 typedef struct {
 	UA_String name;
     CashSensor io;
@@ -76,7 +77,6 @@ typedef struct {
 	Sensor sensor;
     Valve valve;
 } ControlLoop;
-
 
 /* --- Инициализируем кэш --- */
 static void cash_init(CashSensor* t) {

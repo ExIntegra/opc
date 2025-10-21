@@ -27,7 +27,7 @@ static inline void PID_init(PIDControllerData* pid)
     pid->lastError = 0.0;
     pid->setpoint = 0.0;
 	pid->manualoutput = 0.0;
-    pid->mode = false; //???
+    pid->mode = UA_FALSE; //???
 }
 
 void pidCalculate(PIDControllerData* pid);

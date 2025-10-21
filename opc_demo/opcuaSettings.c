@@ -3,7 +3,6 @@
 #include "opcuaSettings.h"
 #include "DAQ.h"
 
-
 static UA_StatusCode readDoubleDS(UA_Server* server,
     const UA_NodeId* sessionId,
     void* sessionContext,
@@ -54,7 +53,6 @@ static UA_StatusCode readDoubleDS(UA_Server* server,
 
     out->status = UA_STATUSCODE_GOOD;
     out->hasStatus = true;
-
     return UA_STATUSCODE_GOOD;
 }
 
@@ -128,7 +126,6 @@ static UA_StatusCode writeBoolDS(UA_Server* server,
     const UA_Boolean v = *(const UA_Boolean*)data->value.data;
     /* Для булева ничего не «проверяем на конечность» */
     *(UA_Boolean*)nodeContext = v;
-
     return UA_STATUSCODE_GOOD;
 }
 
@@ -161,7 +158,6 @@ static UA_StatusCode writeUInt32DS(UA_Server* server,
 
     const UA_UInt32 v = *(const UA_UInt32*)data->value.data;
     *(UA_UInt32*)nodeContext = v;
-
     return UA_STATUSCODE_GOOD;
 }
 
@@ -215,7 +211,6 @@ static UA_StatusCode readUInt32DS(UA_Server* server,
 
     out->status = UA_STATUSCODE_GOOD;
     out->hasStatus = true;
-
     return UA_STATUSCODE_GOOD;
 }
 
@@ -269,7 +264,6 @@ static UA_StatusCode readBoolDS(UA_Server* server,
 
     out->status = UA_STATUSCODE_GOOD;
     out->hasStatus = true;
-
     return UA_STATUSCODE_GOOD;
 }
 
@@ -293,7 +287,6 @@ static UA_StatusCode findChildVar(UA_Server* server,
     //Имя цели, к которому идем в поиске.
     rpe.targetName = UA_QUALIFIEDNAME(1, (char*)browseName);
     //Создали шаг и переходим к созаднию маршрута из BrowsePath.
-
 
     //Собираем маршрут из  экземпляра структуры BrowsePath , стартуя от parent, передаем маршрут rpe.
     UA_BrowsePath bp; //экземпляр стурктуры Browsepath
@@ -354,7 +347,6 @@ static UA_StatusCode attachChild(UA_Server* server,
         UA_Server_setNodeContext(server, childId, NULL); // Убираем контекст в случае ошибки привязки очистки контекста при удаление узла
         return ret;
     }
-
     return UA_STATUSCODE_GOOD;
 }
 
@@ -385,7 +377,6 @@ static UA_StatusCode attachChildBool(UA_Server* server,
 
         return ret;
     }
-
     return UA_STATUSCODE_GOOD;
 }
 
@@ -416,7 +407,6 @@ static UA_StatusCode attachChildUInt32(UA_Server* server,
 
         return ret;
     }
-
     return UA_STATUSCODE_GOOD;
 }
 
@@ -565,6 +555,7 @@ UA_NodeId addValveType(UA_Server* server) {
     addReferenceMandatory(server, actualId);
     return valveTypeId;
 }
+
 // Функция для создания типа SensorType
 UA_NodeId addSensorType(UA_Server* server) {
     UA_ObjectTypeAttributes varAttr = UA_ObjectTypeAttributes_default;
@@ -658,7 +649,6 @@ UA_NodeId addSensorType(UA_Server* server) {
         UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
         hysteresisAttr, NULL, &hysteresisId);
     addReferenceMandatory(server, hysteresisId);
-
     return sensorTypeId;
 }
 
@@ -676,7 +666,7 @@ UA_NodeId addPIDControllerType(UA_Server* server) {
     UA_VariableAttributes nmAttr = UA_VariableAttributes_default;
     nmAttr.displayName = UA_LOCALIZEDTEXT("en-US", "PIDName");
     nmAttr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    nmAttr.accessLevel = UA_ACCESSLEVELMASK_READ; /* или READ|WRITE по задаче */
+    nmAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
     UA_NodeId pidNameId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
         UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
@@ -780,7 +770,6 @@ UA_NodeId addPIDControllerType(UA_Server* server) {
         UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
         modeAttr, NULL, &modeId);
     addReferenceMandatory(server, modeId);
-
     return pidControllerTypeId;
 }
 
@@ -892,7 +881,7 @@ UA_StatusCode opcua_create_valve_instance(UA_Server* server, const char* valveNa
 		printf("Valve %s created successfully\n", valveName);
 		valve->objId = valveObjId;
     }
-    /* 2) Привязываем переменные Valve из объекта к полям структуры CashValve */
+    /* Привязываем переменные Valve из объекта к полям структуры CashValve */
     rc = attachChildBool(server, valveObjId, "ClampEnable", &valve->clampEnable); if (rc) return rc;
     rc = attachChild(server, valveObjId, "OutMax", &valve->outMax); if (rc) return rc;
     rc = attachChild(server, valveObjId, "OutMin", &valve->outMin); if (rc) return rc;
