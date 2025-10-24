@@ -1,6 +1,6 @@
-#include "pidCalculate.h"
+#include "DAQ.h"
 
-void pidCalculate(PIDControllerData* pid) {
+void pidCalculate(PIDControllerType* pid) {
 
     double error = pid->setpoint - pid->processvalue;
 
@@ -13,6 +13,4 @@ void pidCalculate(PIDControllerData* pid) {
     pid->lastError = error;
 
     pid->output = proportional + integral + derivative;
-
-	//pid->manualoutput = pid->output; // сохраняем в ручной выход
 }

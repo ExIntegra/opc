@@ -775,7 +775,7 @@ UA_NodeId addPIDControllerType(UA_Server* server) {
 
 
 /* --- Функция для создания объекта PID из типа PIDControllerType --- */
-UA_StatusCode opcua_create_pid_instance(UA_Server* server, const char* pidName, ControlLoop* loop) {
+UA_StatusCode opcua_create_pid_instance(UA_Server* server, const char* pidName, PIDControllerType* pid) {
     UA_NodeId pidObjId;
     UA_StatusCode rc = UA_Server_addObjectNode(server,
         UA_NODEID_NULL,           // Генерация IПD
@@ -793,14 +793,14 @@ UA_StatusCode opcua_create_pid_instance(UA_Server* server, const char* pidName, 
 		printf("PID %s created successfully\n", pidName);
     }
     /* 2) Привязываем переменные PID из объекта к полям структуры ControlLoop */
-    rc = attachChild(server, pidObjId, "KP", &loop->pid.kp); if (rc) return rc;
-    rc = attachChild(server, pidObjId, "KI", &loop->pid.ki); if (rc) return rc;
-    rc = attachChild(server, pidObjId, "KD", &loop->pid.kd); if (rc) return rc;
-    rc = attachChild(server, pidObjId, "SETPOINT", &loop->pid.setpoint); if (rc) return rc;
-    rc = attachChild(server, pidObjId, "PROCESSVALUE", &loop->pid.processvalue); if (rc) return rc;
-    rc = attachChild(server, pidObjId, "OUTPUT", &loop->pid.output); if (rc) return rc;
-    rc = attachChild(server, pidObjId, "MANUALOUTPUT", &loop->pid.manualoutput); if (rc) return rc;
-    rc = attachChildBool(server, pidObjId, "MODE", &loop->pid.mode); if (rc) return rc;
+    rc = attachChild(server, pidObjId, "KP", &pid->kp); if (rc) return rc;
+    rc = attachChild(server, pidObjId, "KI", &pid->ki); if (rc) return rc;
+    rc = attachChild(server, pidObjId, "KD", &pid->kd); if (rc) return rc;
+    rc = attachChild(server, pidObjId, "SETPOINT", &pid->setpoint); if (rc) return rc;
+    rc = attachChild(server, pidObjId, "PROCESSVALUE", &pid->processvalue); if (rc) return rc;
+    rc = attachChild(server, pidObjId, "OUTPUT", &pid->output); if (rc) return rc;
+    rc = attachChild(server, pidObjId, "MANUALOUTPUT", &pid->manualoutput); if (rc) return rc;
+    rc = attachChildBool(server, pidObjId, "MODE", &pid->mode); if (rc) return rc;
     return UA_STATUSCODE_GOOD;
 }
 

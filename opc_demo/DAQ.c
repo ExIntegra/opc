@@ -1,12 +1,56 @@
 #include "DAQ.h"
 #include "sensorsRead.h"
+#include <math.h>
 
+/* clamp */
+static inline UA_Double clampd(UA_Double x, UA_Double lo, UA_Double hi) {
+    return (x < lo) ? lo : (x > hi) ? hi : x;
+}
+
+/* гистерезис тревог */
+static UA_Boolean updateAlarmStateWithHyst(UA_Double pv,
+    const AlarmLimits* lim,
+    AlarmState* st)
+{
+    UA_Boolean changed = UA_FALSE;
+    const UA_Boolean oLL = st->lowLow, oL = st->low, oH = st->high, oHH = st->highHigh;
+    const UA_Double h = lim->hysteresis;
+
+    if (!st->highHigh) { if (pv >= lim->highHigh) st->highHigh = UA_TRUE; }
+    else { if (pv <= lim->highHigh - h) st->highHigh = UA_FALSE; }
+
+    if (!st->high) { if (pv >= lim->high) st->high = UA_TRUE; }
+    else { if (pv <= lim->high - h) st->high = UA_FALSE; }
+
+    if (!st->lowLow) { if (pv <= lim->lowLow) st->lowLow = UA_TRUE; }
+    else { if (pv >= lim->lowLow + h) st->lowLow = UA_FALSE; }
+
+    if (!st->low) { if (pv <= lim->low) st->low = UA_TRUE; }
+    else { if (pv >= lim->low + h) st->low = UA_FALSE; }
+
+    if (oLL != st->lowLow || oL != st->low || oH != st->high || oHH != st->highHigh)
+        changed = UA_TRUE;
+    return changed;
+}
+
+/* отправка команды на исполнитель — пустышка (команда уже в valve.command) */
+static void actuator_send(UA_Double command) { (void)command; }
+
+/* чтение фидбэка — если нет датчика, вернём NaN, tick подставит actual=command */
+static UA_Double actuator_readback(void) { return NAN; }
 
 // Обновление данных с датчика температуры DS18B20
 void daq_tick(CashSensor* sensor) {
 
-    double value;
+    sensor->pv = 50.0; //для отладки
+	sensor->st = UA_STATUSCODE_GOOD; //для отладки
 
+
+	//Реальное чтение с датчика DS18B20 закомментировано для отладки
+
+
+    /*/////////////////////////////////////////////////////////////////
+    UA_Double value;
     UA_StatusCode rc = ds18b20_readC(&value);
     if (rc == UA_STATUSCODE_GOOD) {
 		sensor->pv = value; // Обновляем значение PV
@@ -15,6 +59,7 @@ void daq_tick(CashSensor* sensor) {
     else {
 		sensor->st = rc; // Обновляем статус ошибки
     }
+    */////////////////////////////////////////////////////////////////
 }
 
 /* Колбэк: раз в 100мс опрашиваем датчик.

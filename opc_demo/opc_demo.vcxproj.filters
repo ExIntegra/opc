@@ -30,13 +30,7 @@
     <ClCompile Include="pidCalculate.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="config.c">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="opcuaSettings.c">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="servo.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
@@ -50,16 +44,7 @@
     <ClInclude Include="DAQ.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="pidCalculate.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="config.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="opcuaSettings.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="servo.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

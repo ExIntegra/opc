@@ -73,7 +73,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+    <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)bin\$(opc_demo)\$(Platform)\$(Configuration)\</OutDir>
@@ -145,23 +145,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="config.c" />
     <ClCompile Include="DAQ.c" />
     <ClCompile Include="opcuaSettings.c" />
     <ClCompile Include="pidCalculate.c" />
     <ClCompile Include="sensorsAddress.c" />
     <ClCompile Include="sensorsRead.c" />
     <ClCompile Include="main.c" />
-    <ClCompile Include="servo.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="config.h" />
     <ClInclude Include="DAQ.h" />
     <ClInclude Include="opcuaSettings.h" />
-    <ClInclude Include="pidCalculate.h" />
     <ClInclude Include="sensorsAddress.h" />
     <ClInclude Include="sensorsRead.h" />
-    <ClInclude Include="servo.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
