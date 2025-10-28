@@ -1,33 +1,40 @@
-#pragma once
+п»ї#pragma once
 #include <open62541/server.h>
 #include <open62541/types.h>
 
-/* --- Режим политики безопасности клапана ---*/
+/* --- Р РµР¶РёРј РїРѕР»РёС‚РёРєРё Р±РµР·РѕРїР°СЃРЅРѕСЃС‚Рё РєР»Р°РїР°РЅР° ---*/
 typedef enum {
-    PVFAIL_HOLD = 0,   /* держать прошлый output */
-    PVFAIL_TO_MAN,     /* сразу перевести контур в MAN и взять manualoutput */
-    PVFAIL_TO_SAFE     /* поставить фиксированный безопасный выход safeOutput */
+    PVFAIL_HOLD = 0,   /* РґРµСЂР¶Р°С‚СЊ РїСЂРѕС€Р»С‹Р№ output */
+    PVFAIL_TO_MAN,     /* СЃСЂР°Р·Сѓ РїРµСЂРµРІРµСЃС‚Рё РєРѕРЅС‚СѓСЂ РІ MAN Рё РІР·СЏС‚СЊ manualoutput */
+    PVFAIL_TO_SAFE     /* РїРѕСЃС‚Р°РІРёС‚СЊ С„РёРєСЃРёСЂРѕРІР°РЅРЅС‹Р№ Р±РµР·РѕРїР°СЃРЅС‹Р№ РІС‹С…РѕРґ safeOutput */
 } PvFailAction;
 
-/* --- Политика безопасности --- */
+/* --- РџРѕР»РёС‚РёРєР° Р±РµР·РѕРїР°СЃРЅРѕСЃС‚Рё --- */
 typedef struct {
-    PvFailAction action;        // выбранная стратегия
-    UA_Boolean clampEnable;   // Включить ограничение выхода
-    UA_Double outMin;        // Нижняя граница выхода (степень открытия клапана)
-    UA_Double outMax;        // Верхняя граница выхода (степень открытия клапана)
-    UA_Double safeOutput;    // Степень открытия клапана в безопасном состоянии
+    PvFailAction action;        // РІС‹Р±СЂР°РЅРЅР°СЏ СЃС‚СЂР°С‚РµРіРёСЏ
+    UA_Boolean clampEnable;   // Р’РєР»СЋС‡РёС‚СЊ РѕРіСЂР°РЅРёС‡РµРЅРёРµ РІС‹С…РѕРґР°
+    UA_Double outMin;        // РќРёР¶РЅСЏСЏ РіСЂР°РЅРёС†Р° РІС‹С…РѕРґР° (СЃС‚РµРїРµРЅСЊ РѕС‚РєСЂС‹С‚РёСЏ РєР»Р°РїР°РЅР°)
+    UA_Double outMax;        // Р’РµСЂС…РЅСЏСЏ РіСЂР°РЅРёС†Р° РІС‹С…РѕРґР° (СЃС‚РµРїРµРЅСЊ РѕС‚РєСЂС‹С‚РёСЏ РєР»Р°РїР°РЅР°)
+    UA_Double safeOutput;    // РЎС‚РµРїРµРЅСЊ РѕС‚РєСЂС‹С‚РёСЏ РєР»Р°РїР°РЅР° РІ Р±РµР·РѕРїР°СЃРЅРѕРј СЃРѕСЃС‚РѕСЏРЅРёРё
 } SafetyPolicy;
 
-/* --- Установка сигналов сигнализации и блокировок --- */
+/* --- РЈСЃС‚Р°РЅРѕРІРєР° СЃРёРіРЅР°Р»РѕРІ СЃРёРіРЅР°Р»РёР·Р°С†РёРё Рё Р±Р»РѕРєРёСЂРѕРІРѕРє --- */
 typedef struct {
     UA_Double low;
     UA_Double lowLow;
     UA_Double high;
     UA_Double highHigh;
-    UA_Double hysteresis; // гистерезис для сигналов. Защищает от дребезга.
+
+	UA_UInt16 priorityLowAlarm;    // РїСЂРёРѕСЂРёС‚РµС‚ С‚СЂРµРІРѕРіРё
+	UA_UInt16 priorityHighAlarm;   // РїСЂРёРѕСЂРёС‚РµС‚ С‚СЂРµРІРѕРіРё
+	UA_UInt16 priorityLowLowAlarm;  // РїСЂРёРѕСЂРёС‚РµС‚ Р±Р»РѕРєРёСЂРѕРІРєРё
+	UA_UInt16 priorityHighHighAlarm; // РїСЂРёРѕСЂРёС‚РµС‚ Р±Р»РѕРєРёСЂРѕРІРєРё
+	UA_UInt16 priorityNormal;    // РїСЂРёРѕСЂРёС‚РµС‚ РЅРѕСЂРјР°Р»СЊРЅРѕРіРѕ СЃРѕСЃС‚РѕСЏРЅРёСЏ
+
+    UA_Double hysteresis; // РіРёСЃС‚РµСЂРµР·РёСЃ РґР»СЏ СЃРёРіРЅР°Р»РѕРІ. Р—Р°С‰РёС‰Р°РµС‚ РѕС‚ РґСЂРµР±РµР·РіР°.
 } AlarmLimits;
 
-/* --- Состояние сигналов сигнализации --- */
+/* --- РЎРѕСЃС‚РѕСЏРЅРёРµ СЃРёРіРЅР°Р»РѕРІ СЃРёРіРЅР°Р»РёР·Р°С†РёРё --- */
 typedef struct {
     UA_Boolean lowLow;
     UA_Boolean low;
@@ -35,70 +42,73 @@ typedef struct {
     UA_Boolean highHigh;
 } AlarmState;
 
-/* --- Параметры клапана --- */
+/* --- РџР°СЂР°РјРµС‚СЂС‹ РєР»Р°РїР°РЅР° --- */
 typedef struct {
 	UA_String name;
     UA_NodeId objId;
-    UA_Boolean clampEnable;
+	UA_Boolean clampEnable; // Р’РєР»СЋС‡РёС‚СЊ РѕРіСЂР°РЅРёС‡РµРЅРёРµ РІС‹С…РѕРґР° РєР»Р°РїР°РЅР°
 
-    UA_Double outMin;
-    UA_Double outMax;
+	UA_Double outMin;   // Р¤РёР·РёС‡РµСЃРєРёРµ РїСЂРµРґРµР»С‹ РІС‹С…РѕРґР° РєР»Р°РїР°РЅР°
+	UA_Double outMax;   // Р¤РёР·РёС‡РµСЃРєРёРµ РїСЂРµРґРµР»С‹ РІС‹С…РѕРґР° РєР»Р°РїР°РЅР°
 
     UA_Double command;
-	UA_Double actual;
+	UA_Double actual;   // Р¤Р°РєС‚РёС‡РµСЃРєРѕРµ РїРѕР»РѕР¶РµРЅРёРµ РєР»Р°РїР°РЅР°
 
-    UA_UInt32 actionHH;
-    UA_UInt32 actionLL;
-    UA_Double safeOutputHH;
-    UA_Double safeOutputLL;
+	UA_UInt32 actionHH; // РџРѕР»РёС‚РёРєР° Р±РµР·РѕРїР°СЃРЅРѕСЃС‚Рё РїСЂРё СЃСЂР°Р±Р°С‚С‹РІР°РЅРёРё HighHigh
+    UA_UInt32 actionLL; // РџРѕР»РёС‚РёРєР° Р±РµР·РѕРїР°СЃРЅРѕСЃС‚Рё РїСЂРё СЃСЂР°Р±Р°С‚С‹РІР°РЅРёРё LowLow
+    UA_Double safeOutputHH; // Р‘РµР·РѕРїР°СЃРЅС‹Р№ РІС‹С…РѕРґ РїСЂРё СЃСЂР°Р±Р°С‚С‹РІР°РЅРёРё HighHigh
+    UA_Double safeOutputLL; // Р‘РµР·РѕРїР°СЃРЅС‹Р№ РІС‹С…РѕРґ РїСЂРё СЃСЂР°Р±Р°С‚С‹РІР°РЅРёРё LowLow
 } Valve;
 
-/* --- Кэш для хранения значения датчика и статуса прочтения --- */
+/* --- РљСЌС€ РґР»СЏ С…СЂР°РЅРµРЅРёСЏ Р·РЅР°С‡РµРЅРёСЏ РґР°С‚С‡РёРєР° Рё СЃС‚Р°С‚СѓСЃР° РїСЂРѕС‡С‚РµРЅРёСЏ --- */
 typedef struct {
     double pv;
-    UA_StatusCode st;     /* статус последнего чтения */
+    UA_StatusCode st;     /* СЃС‚Р°С‚СѓСЃ РїРѕСЃР»РµРґРЅРµРіРѕ С‡С‚РµРЅРёСЏ */
 } CashSensor;
 
-/* --- Параметры датчика --- */
+/* --- РџР°СЂР°РјРµС‚СЂС‹ РґР°С‚С‡РёРєР° --- */
 typedef struct {
-	UA_String name;
-    CashSensor io;
+	UA_String   name;
+    CashSensor  io;
     AlarmLimits limits;
-    AlarmState state;
-    UA_NodeId objId;            // NodeId объекта датчика в адресном пространстве
-    UA_NodeId alarmConditionId; // NodeId ConditionType для сигнализации
+    AlarmState  state;
+    UA_NodeId   objId;            // NodeId РѕР±СЉРµРєС‚Р° РґР°С‚С‡РёРєР° РІ Р°РґСЂРµСЃРЅРѕРј РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРµ
+    UA_NodeId   alarmConditionId; // NodeId ConditionType РґР»СЏ СЃРёРіРЅР°Р»РёР·Р°С†РёРё
 } Sensor;
 
-/* --- Параметры PID контроллера --- */
+/* --- РџР°СЂР°РјРµС‚СЂС‹ PID РєРѕРЅС‚СЂРѕР»Р»РµСЂР° --- */
 typedef struct {
     UA_String name;
+
     UA_Double kp;
     UA_Double ki;
     UA_Double kd;
-    UA_Double output;
-    UA_Double manualoutput;
-    UA_Double setpoint;
-    UA_Double processvalue;
-    UA_Double integral;
-    UA_Double lastError;
+
+    UA_Double  output;
+    UA_Double  manualoutput;
+    UA_Double  setpoint;
+    UA_Double  processvalue;
+    UA_Double  integral;
+    UA_Double  lastError;
     UA_Boolean mode;
 } PIDControllerType;
 
-/* --- Полный контур управления с PID контроллером, кэшем и политикой безопасности --- */
+/* --- РџРѕР»РЅС‹Р№ РєРѕРЅС‚СѓСЂ СѓРїСЂР°РІР»РµРЅРёСЏ СЃ PID РєРѕРЅС‚СЂРѕР»Р»РµСЂРѕРј, РєСЌС€РµРј Рё РїРѕР»РёС‚РёРєРѕР№ Р±РµР·РѕРїР°СЃРЅРѕСЃС‚Рё --- */
 typedef struct {
 	UA_String name;
+
     PIDControllerType pid;
 	Sensor sensor;
     Valve valve;
 } ControlLoop;
 
-/* --- Инициализируем кэш --- */
+/* --- РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј РєСЌС€ --- */
 static void cash_init(CashSensor* t) {
     t->pv = 0.0;
     t->st = UA_STATUSCODE_BADDATAUNAVAILABLE;
 }
 
-/* --- Инициализация клапана --- */
+/* --- РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РєР»Р°РїР°РЅР° --- */
 static void valve_init(Valve* v) {
     v->name = UA_STRING_NULL;
     v->objId = UA_NODEID_NULL;
@@ -114,10 +124,11 @@ static void valve_init(Valve* v) {
 }
 
 
-/* --- Инициализация датчика --- */
-static void sensor_init(Sensor* s) {
-    s->name = UA_STRING_NULL;
+/* --- РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РґР°С‚С‡РёРєР° --- */
+static void sensor_init(Sensor* s)
+{
     cash_init(&s->io);
+    s->name = UA_STRING_NULL;
     s->limits.low = 0.0;
     s->limits.lowLow = 0.0;
     s->limits.high = 100.0;
@@ -129,29 +140,49 @@ static void sensor_init(Sensor* s) {
     s->state.highHigh = UA_FALSE;
     s->objId = UA_NODEID_NULL;
     s->alarmConditionId = UA_NODEID_NULL;
+	s->limits.priorityLowAlarm = 500;
+	s->limits.priorityHighAlarm = 500;
+	s->limits.priorityLowLowAlarm = 1000;
+	s->limits.priorityHighHighAlarm = 1000;
+	s->limits.priorityNormal = 0;
 }
 
-/* --- Инициализация PID контроллера --- */
+/* --- РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ PID РєРѕРЅС‚СЂРѕР»Р»РµСЂР° --- */
 static inline void pid_init(PIDControllerType* pid)
 {
     pid->name = UA_STRING_NULL;
-    pid->kp = 0.0;
-    pid->ki = 0.0;
+    pid->kp = 1.0;
+    pid->ki = 1.0;
     pid->kd = 0.0;
     pid->processvalue = 0.0;
     pid->output = 0.0;
     pid->integral = 0.0;
     pid->lastError = 0.0;
-    pid->setpoint = 0.0;
+    pid->setpoint = 70.0;
     pid->manualoutput = 0.0;
-    pid->mode = UA_FALSE;
+    pid->mode = UA_TRUE;
 }
 
-// Однократный опрос датчика в кэш.
+// РћРґРЅРѕРєСЂР°С‚РЅС‹Р№ РѕРїСЂРѕСЃ РґР°С‚С‡РёРєР° РІ РєСЌС€.
 void daq_tick(CashSensor* t);
 
-// Многократный опрос датчика и пересчет pid.
+// РњРЅРѕРіРѕРєСЂР°С‚РЅС‹Р№ РѕРїСЂРѕСЃ РґР°С‚С‡РёРєР° Рё РїРµСЂРµСЃС‡РµС‚ pid.
 void tick(UA_Server* server, void* ctx);
 
-// Добавьте объявление функции PID-регулятора перед её использованием
+// Р Р°СЃС‡РµС‚ РџРР”-СЂРµРіСѓР»СЏС‚РѕСЂР°.
 void pidCalculate(PIDControllerType* pid);
+
+// РџСЂРѕРІРµСЂСЏРµРј, Р°РєС‚РёРІРЅР° Р»Рё Р»СЋР±Р°СЏ РёР· С‚СЂРµРІРѕРі.
+void updateActiveFlag(UA_Server* server, ControlLoop* loop);
+
+// РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј СѓСЂРѕРІРµРЅСЊ СЃРµСЂСЊРµР·РЅРѕСЃС‚Рё С‚СЂРµРІРѕРіРё РІ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РѕС‚ Р°РєС‚РёРІРЅРѕР№ С‚СЂРµРІРѕРіРё.
+void setSeverity(UA_Server* server, ControlLoop* loop);
+
+// РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј СЃРѕРѕР±С‰РµРЅРёРµ С‚СЂРµРІРѕРіРё РІ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РѕС‚ Р°РєС‚РёРІРЅРѕР№ С‚СЂРµРІРѕРіРё.
+void setMessageAlarm(UA_Server* server, ControlLoop* loop);
+
+// РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј СЃРѕРѕР±С‰РµРЅРёРµ С‚СЂРµРІРѕРіРё РІ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РѕС‚ Р°РєС‚РёРІРЅРѕР№ С‚СЂРµРІРѕРіРё.
+UA_Boolean updateAlarmStateWithHyst(UA_Double pv, const AlarmLimits* limits, AlarmState* state);
+
+// Р’С‹РїРѕР»РЅСЏРµРј Р°РІР°СЂРёР№РЅРѕРµ РѕС‚РєР»СЋС‡РµРЅРёРµ РєРѕРЅС‚СѓСЂР° СѓРїСЂР°РІР»РµРЅРёСЏ.
+void emergency_protection(ControlLoop* loop, UA_Double* ctrl);

@@ -33,6 +33,9 @@
     <ClCompile Include="opcuaSettings.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="alarmsIsActive.c">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sensorsAddress.h">

@@ -13,6 +13,7 @@ UA_NodeId addPIDControllerType(UA_Server* server);
 UA_NodeId addSensorType(UA_Server* server);
 UA_NodeId addValveType(UA_Server* server);
 
-UA_StatusCode opcua_create_pid_instance(UA_Server* server, const char* pidName, PIDControllerType* loop);
-UA_StatusCode opcua_create_sensor_instance(UA_Server* server, const char* sensorName, Sensor* sensor);
-UA_StatusCode opcua_create_valve_instance(UA_Server* server, const char* valveName, Valve* valve);
+UA_StatusCode opc_ua_create_cell_folder(UA_Server* server, const char* cellName, UA_NodeId* outFolderId);
+UA_StatusCode opc_ua_create_pid_instance(UA_Server* server, UA_NodeId parentFolder, const char* pidName, PIDControllerType* loop);
+UA_StatusCode opc_ua_create_sensor_instance(UA_Server* server, UA_NodeId parentFolder, const char* sensorName, Sensor* sensor);
+UA_StatusCode opc_ua_create_valve_instance(UA_Server* server, UA_NodeId parentFolder, const char* valveName, Valve* valve);

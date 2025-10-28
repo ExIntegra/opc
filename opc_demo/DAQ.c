@@ -1,4 +1,4 @@
-#include "DAQ.h"
+ï»¿#include "DAQ.h"
 #include "sensorsRead.h"
 #include <math.h>
 
@@ -7,97 +7,83 @@ static inline UA_Double clampd(UA_Double x, UA_Double lo, UA_Double hi) {
     return (x < lo) ? lo : (x > hi) ? hi : x;
 }
 
-/* ãèñòåðåçèñ òðåâîã */
-static UA_Boolean updateAlarmStateWithHyst(UA_Double pv,
-    const AlarmLimits* lim,
-    AlarmState* st)
-{
-    UA_Boolean changed = UA_FALSE;
-    const UA_Boolean oLL = st->lowLow, oL = st->low, oH = st->high, oHH = st->highHigh;
-    const UA_Double h = lim->hysteresis;
-
-    if (!st->highHigh) { if (pv >= lim->highHigh) st->highHigh = UA_TRUE; }
-    else { if (pv <= lim->highHigh - h) st->highHigh = UA_FALSE; }
-
-    if (!st->high) { if (pv >= lim->high) st->high = UA_TRUE; }
-    else { if (pv <= lim->high - h) st->high = UA_FALSE; }
-
-    if (!st->lowLow) { if (pv <= lim->lowLow) st->lowLow = UA_TRUE; }
-    else { if (pv >= lim->lowLow + h) st->lowLow = UA_FALSE; }
-
-    if (!st->low) { if (pv <= lim->low) st->low = UA_TRUE; }
-    else { if (pv >= lim->low + h) st->low = UA_FALSE; }
-
-    if (oLL != st->lowLow || oL != st->low || oH != st->high || oHH != st->highHigh)
-        changed = UA_TRUE;
-    return changed;
-}
-
-/* îòïðàâêà êîìàíäû íà èñïîëíèòåëü — ïóñòûøêà (êîìàíäà óæå â valve.command) */
+/* Ð¾Ñ‚Ð¿Ñ€Ð°Ð²ÐºÐ° ÐºÐ¾Ð¼Ð°Ð½Ð´Ñ‹ Ð½Ð° Ð¸ÑÐ¿Ð¾Ð»Ð½Ð¸Ñ‚ÐµÐ»ÑŒ â€” Ð¿ÑƒÑÑ‚Ñ‹ÑˆÐºÐ° (ÐºÐ¾Ð¼Ð°Ð½Ð´Ð° ÑƒÐ¶Ðµ Ð² valve.command) */
 static void actuator_send(UA_Double command) { (void)command; }
 
-/* ÷òåíèå ôèäáýêà — åñëè íåò äàò÷èêà, âåðí¸ì NaN, tick ïîäñòàâèò actual=command */
+/* Ñ‡Ñ‚ÐµÐ½Ð¸Ðµ Ñ„Ð¸Ð´Ð±ÑÐºÐ° â€” ÐµÑÐ»Ð¸ Ð½ÐµÑ‚ Ð´Ð°Ñ‚Ñ‡Ð¸ÐºÐ°, Ð²ÐµÑ€Ð½Ñ‘Ð¼ NaN, tick Ð¿Ð¾Ð´ÑÑ‚Ð°Ð²Ð¸Ñ‚ actual=command */
 static UA_Double actuator_readback(void) { return NAN; }
 
-// Îáíîâëåíèå äàííûõ ñ äàò÷èêà òåìïåðàòóðû DS18B20
+// ÐžÐ±Ð½Ð¾Ð²Ð»ÐµÐ½Ð¸Ðµ Ð´Ð°Ð½Ð½Ñ‹Ñ… Ñ Ð´Ð°Ñ‚Ñ‡Ð¸ÐºÐ° Ñ‚ÐµÐ¼Ð¿ÐµÑ€Ð°Ñ‚ÑƒÑ€Ñ‹ DS18B20
+
 void daq_tick(CashSensor* sensor) {
 
-    sensor->pv = 50.0; //äëÿ îòëàäêè
-	sensor->st = UA_STATUSCODE_GOOD; //äëÿ îòëàäêè
+	static UA_Boolean inited = UA_FALSE;
 
+	if (!inited) {
+		sensor->pv = 50.0;              // ÑÑ‚Ð°Ñ€Ñ‚Ð¾Ð²Ð¾Ðµ Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ðµ Ð¾Ð´Ð¸Ð½ Ñ€Ð°Ð·
+		inited = UA_TRUE;
+	}
+	else {
+		sensor->pv += 1.0;              // +1 Ð½Ð° ÐºÐ°Ð¶Ð´Ñ‹Ð¹ Ñ‚Ð¸Ðº
+		// Ð¿Ñ€Ð¸ Ð¶ÐµÐ»Ð°Ð½Ð¸Ð¸ â€” Ð·Ð°Ñ†Ð¸ÐºÐ»Ð¸Ð²Ð°Ð½Ð¸Ðµ:
+		// if(sensor->pv > 100.0) sensor->pv = 0.0;
+	}
 
-	//Ðåàëüíîå ÷òåíèå ñ äàò÷èêà DS18B20 çàêîììåíòèðîâàíî äëÿ îòëàäêè
+	sensor->st = UA_STATUSCODE_GOOD;    // ÑÑ‚Ð°Ñ‚ÑƒÑ OK
 
+	//Ð ÐµÐ°Ð»ÑŒÐ½Ð¾Ðµ Ñ‡Ñ‚ÐµÐ½Ð¸Ðµ Ñ Ð´Ð°Ñ‚Ñ‡Ð¸ÐºÐ° DS18B20 Ð·Ð°ÐºÐ¾Ð¼Ð¼ÐµÐ½Ñ‚Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð¾ Ð´Ð»Ñ Ð¾Ñ‚Ð»Ð°Ð´ÐºÐ¸
 
+     
     /*/////////////////////////////////////////////////////////////////
     UA_Double value;
     UA_StatusCode rc = ds18b20_readC(&value);
     if (rc == UA_STATUSCODE_GOOD) {
-		sensor->pv = value; // Îáíîâëÿåì çíà÷åíèå PV
-		sensor->st = UA_STATUSCODE_GOOD; // Îáíîâëÿåì ñòàòóñ íà GOOD
+		sensor->pv = value; // ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ðµ PV
+		sensor->st = UA_STATUSCODE_GOOD; // ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ ÑÑ‚Ð°Ñ‚ÑƒÑ Ð½Ð° GOOD
     }
     else {
-		sensor->st = rc; // Îáíîâëÿåì ñòàòóñ îøèáêè
+		sensor->st = rc; // ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ ÑÑ‚Ð°Ñ‚ÑƒÑ Ð¾ÑˆÐ¸Ð±ÐºÐ¸
     }
     */////////////////////////////////////////////////////////////////
 }
 
-/* Êîëáýê: ðàç â 100ìñ îïðàøèâàåì äàò÷èê.
-   Â çàâèìîñòè îò ñòàòóñà îïðîñà äàò÷èêà, ïîëèòèêè áåçîïàñíîè êëàïàíà è åãî ðåæèìà ñòðîèòñÿ ïîâåäåíèå ñèñòåìû */
+/* ÐšÐ¾Ð»Ð±ÑÐº: Ñ€Ð°Ð· Ð² 100Ð¼Ñ Ð¾Ð¿Ñ€Ð°ÑˆÐ¸Ð²Ð°ÐµÐ¼ Ð´Ð°Ñ‚Ñ‡Ð¸Ðº.
+   Ð’ Ð·Ð°Ð²Ð¸Ð¼Ð¾ÑÑ‚Ð¸ Ð¾Ñ‚ ÑÑ‚Ð°Ñ‚ÑƒÑÐ° Ð¾Ð¿Ñ€Ð¾ÑÐ° Ð´Ð°Ñ‚Ñ‡Ð¸ÐºÐ°, Ð¿Ð¾Ð»Ð¸Ñ‚Ð¸ÐºÐ¸ Ð±ÐµÐ·Ð¾Ð¿Ð°ÑÐ½Ð¾Ð¸ ÐºÐ»Ð°Ð¿Ð°Ð½Ð° Ð¸ ÐµÐ³Ð¾ Ñ€ÐµÐ¶Ð¸Ð¼Ð° ÑÑ‚Ñ€Ð¾Ð¸Ñ‚ÑÑ Ð¿Ð¾Ð²ÐµÐ´ÐµÐ½Ð¸Ðµ ÑÐ¸ÑÑ‚ÐµÐ¼Ñ‹ */
 void tick(UA_Server* server, void* ctx)
 {
     if (!server || !ctx) return;
 
     ControlLoop* loop = (ControlLoop*)ctx;
 
-    /* Îïðàøèâàåì äàò÷èê â êýø */
+    /* ÐžÐ¿Ñ€Ð°ÑˆÐ¸Ð²Ð°ÐµÐ¼ Ð´Ð°Ñ‚Ñ‡Ð¸Ðº Ð² ÐºÑÑˆ */
     daq_tick(&loop->sensor.io);
 
-	/* 1) Âû÷èñëÿåì êîìàíäó êëàïàíó â çàâèìîñòè îò ðåæèìà PID è ñòàòóñà PV */ 
+	/* 1) Ð’Ñ‹Ñ‡Ð¸ÑÐ»ÑÐµÐ¼ ÐºÐ¾Ð¼Ð°Ð½Ð´Ñƒ ÐºÐ»Ð°Ð¿Ð°Ð½Ñƒ Ð² Ð·Ð°Ð²Ð¸Ð¼Ð¾ÑÑ‚Ð¸ Ð¾Ñ‚ Ñ€ÐµÐ¶Ð¸Ð¼Ð° PID Ð¸ ÑÑ‚Ð°Ñ‚ÑƒÑÐ° PV */ 
     const UA_Double     pv = loop->sensor.io.pv;
     const UA_StatusCode pvSt = loop->sensor.io.st;
     const UA_Boolean    pvGood = UA_StatusCode_isGood(pvSt);
 
-    /* Áàçîâàÿ êîìàíäà: AUTO (PID) ïðè õîðîøåì PV, èíà÷å MAN: */
+    /* Ð‘Ð°Ð·Ð¾Ð²Ð°Ñ ÐºÐ¾Ð¼Ð°Ð½Ð´Ð°: AUTO (PID) Ð¿Ñ€Ð¸ Ñ…Ð¾Ñ€Ð¾ÑˆÐµÐ¼ PV, Ð¸Ð½Ð°Ñ‡Ðµ MAN: */
 
-    UA_Double ctrl; //êîíå÷íàÿ êîìàíäà íà èñïîëíÿþùåå óñòðîéñòâî
+    UA_Double ctrl; //ÐºÐ¾Ð½ÐµÑ‡Ð½Ð°Ñ ÐºÐ¾Ð¼Ð°Ð½Ð´Ð° Ð½Ð° Ð¸ÑÐ¿Ð¾Ð»Ð½ÑÑŽÑ‰ÐµÐµ ÑƒÑÑ‚Ñ€Ð¾Ð¹ÑÑ‚Ð²Ð¾
     
-    //åñëè ñòàòóñ ÷òåíèÿ ëèêâèäåí è ðåæèì ðàáîòû â AUTO (TRUE)
+    //ÐµÑÐ»Ð¸ ÑÑ‚Ð°Ñ‚ÑƒÑ Ñ‡Ñ‚ÐµÐ½Ð¸Ñ Ð»Ð¸ÐºÐ²Ð¸Ð´ÐµÐ½ Ð¸ Ñ€ÐµÐ¶Ð¸Ð¼ Ñ€Ð°Ð±Ð¾Ñ‚Ñ‹ Ð² AUTO (TRUE)
     if (pvGood && loop->pid.mode) {
-        loop->pid.processvalue = pv;  //çàïèñûâàåì â ñòðóêòóðó pid pv
-        pidCalculate(&loop->pid);     //ðàñ÷åò óïðàâëÿþùåãî ñèãíàëà,
-                                      //ðåçóëüòàò êëàäåì â pid.output
-        ctrl = loop->pid.output;      //ïðèñâàèåì êîíå÷íîé êîìàíäå ctrl âûõîäíîé ñèãíàë ïîñëå ðàñ÷åòà pidCalculate
+        loop->pid.processvalue = pv;  //Ð·Ð°Ð¿Ð¸ÑÑ‹Ð²Ð°ÐµÐ¼ Ð² ÑÑ‚Ñ€ÑƒÐºÑ‚ÑƒÑ€Ñƒ pid pv
+        pidCalculate(&loop->pid);     //Ñ€Ð°ÑÑ‡ÐµÑ‚ ÑƒÐ¿Ñ€Ð°Ð²Ð»ÑÑŽÑ‰ÐµÐ³Ð¾ ÑÐ¸Ð³Ð½Ð°Ð»Ð°,
+                                      //Ñ€ÐµÐ·ÑƒÐ»ÑŒÑ‚Ð°Ñ‚ ÐºÐ»Ð°Ð´ÐµÐ¼ Ð² pid.output
+        ctrl = loop->pid.output;      //Ð¿Ñ€Ð¸ÑÐ²Ð°Ð¸ÐµÐ¼ ÐºÐ¾Ð½ÐµÑ‡Ð½Ð¾Ð¹ ÐºÐ¾Ð¼Ð°Ð½Ð´Ðµ ctrl Ð²Ñ‹Ñ…Ð¾Ð´Ð½Ð¾Ð¹ ÑÐ¸Ð³Ð½Ð°Ð» Ð¿Ð¾ÑÐ»Ðµ Ñ€Ð°ÑÑ‡ÐµÑ‚Ð° pidCalculate
     }
-    // åñëè ñòàòóñ ÷òåíèÿ ñ îøèáêîé èëè ðåæèì ðàáîòû MAN (FALSE),
-    // òî èñïîëüçóåì â êà÷åñâå ñòåïåíè îòêðûòèÿ íå ÏÈÄ-ðàñ÷åò, à çíà÷åíèå,
-    // êîòîðîå çàäàë îïåðàòîð ÷åðåç HMI.
+    // ÐµÑÐ»Ð¸ ÑÑ‚Ð°Ñ‚ÑƒÑ Ñ‡Ñ‚ÐµÐ½Ð¸Ñ Ñ Ð¾ÑˆÐ¸Ð±ÐºÐ¾Ð¹ Ð¸Ð»Ð¸ Ñ€ÐµÐ¶Ð¸Ð¼ Ñ€Ð°Ð±Ð¾Ñ‚Ñ‹ MAN (FALSE),
+    // Ñ‚Ð¾ Ð¸ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ Ð² ÐºÐ°Ñ‡ÐµÑÐ²Ðµ ÑÑ‚ÐµÐ¿ÐµÐ½Ð¸ Ð¾Ñ‚ÐºÑ€Ñ‹Ñ‚Ð¸Ñ Ð½Ðµ ÐŸÐ˜Ð”-Ñ€Ð°ÑÑ‡ÐµÑ‚, Ð° Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ðµ,
+    // ÐºÐ¾Ñ‚Ð¾Ñ€Ð¾Ðµ Ð·Ð°Ð´Ð°Ð» Ð¾Ð¿ÐµÑ€Ð°Ñ‚Ð¾Ñ€ Ñ‡ÐµÑ€ÐµÐ· HMI.
     else {
         ctrl = loop->pid.manualoutput;
     }
 
-    /* Îáíîâëÿåì òðåâîãè ñ ãèñòåðåçèñîì è øë¸ì Condition-ñîáûòèå ïðè èçìåíåíèè */
+    /* ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ Ñ‚Ñ€ÐµÐ²Ð¾Ð³Ð¸ Ñ Ð³Ð¸ÑÑ‚ÐµÑ€ÐµÐ·Ð¸ÑÐ¾Ð¼ Ð¸ ÑˆÐ»Ñ‘Ð¼ Condition-ÑÐ¾Ð±Ñ‹Ñ‚Ð¸Ðµ Ð¿Ñ€Ð¸ Ð¸Ð·Ð¼ÐµÐ½ÐµÐ½Ð¸Ð¸ */
     if (!UA_NodeId_isNull(&loop->sensor.alarmConditionId) && pvGood) {
+		// ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ Ñ‚Ñ€ÐµÐ²Ð¾Ð³ Ñ Ð³Ð¸ÑÑ‚ÐµÑ€ÐµÐ·Ð¸ÑÐ¾Ð¼. Ð•ÑÐ»Ð¸ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ Ð¸Ð·Ð¼ÐµÐ½Ð¸Ð»Ð¾ÑÑŒ, Ñ‚Ñ€Ð¸Ð³Ð³ÐµÑ€Ð¸Ð¼ ÑÐ¾Ð±Ñ‹Ñ‚Ð¸Ðµ Ð¸ Ð¾Ñ‚Ñ€Ð°Ð±Ð°Ñ‚Ñ‹Ð²Ð°ÐµÐ¼ Condition, ÑƒÐ²ÐµÐ´Ð¾Ð¼Ð»ÑÑ ÐºÐ»Ð¸ÐµÐ½Ñ‚Ð°.
         if (updateAlarmStateWithHyst(pv, &loop->sensor.limits, &loop->sensor.state)) {
             UA_Boolean T = UA_TRUE, F = UA_FALSE;
 
@@ -117,39 +103,36 @@ void tick(UA_Server* server, void* ctx)
                 UA_QUALIFIEDNAME(0, "LowLowState/Id"),
                 loop->sensor.state.lowLow ? &T : &F, &UA_TYPES[UA_TYPES_BOOLEAN]);
 
+			// ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ Ñ„Ð»Ð°Ð³ Ð°ÐºÑ‚Ð¸Ð²Ð½Ð¾ÑÑ‚Ð¸ Ñ‚Ñ€ÐµÐ²Ð¾Ð³Ð¸ Ð² Condition.
+			updateActiveFlag(server, loop);
+			// Ð£ÑÑ‚Ð°Ð½Ð°Ð²Ð»Ð¸Ð²Ð°ÐµÐ¼ ÑƒÑ€Ð¾Ð²ÐµÐ½ÑŒ ÑÐµÑ€ÑŒÐµÐ·Ð½Ð¾ÑÑ‚Ð¸ Ñ‚Ñ€ÐµÐ²Ð¾Ð³Ð¸ (Severity). ÐÐµÐ¾Ð±Ñ…Ð¾Ð´Ð¸Ð¼ Ð´Ð»Ñ Ñ„Ð¸Ð»ÑŒÑ‚Ñ€Ð°Ñ†Ð¸Ð¸ Ð½Ð° ÐºÐ»Ð¸ÐµÐ½Ñ‚Ðµ (Ñ†Ð²ÐµÑ‚, Ð·Ð²ÑƒÐº, Ð¸ Ñ‚.Ð´.)
+            setSeverity(server, loop);
+			// Ð£ÑÑ‚Ð°Ð½Ð°Ð²Ð»Ð¸Ð²Ð°ÐµÐ¼ ÑÐ¾Ð¾Ð±Ñ‰ÐµÐ½Ð¸Ðµ Ñ‚Ñ€ÐµÐ²Ð¾Ð³Ð¸,ÑƒÐ²ÐµÐ´Ð¾Ð¼Ð»ÑÐµÐ¼ Ð¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»Ñ (ÑÐ¸Ð³Ð½Ð°Ð»Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð½Ð° HMI)
+			setMessageAlarm(server, loop);
+
+			// ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ Ñ‚ÐµÐºÑƒÑ‰ÐµÐµ Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ðµ PV Ð² Condition Ð´Ð»Ñ Ð¾Ñ‚Ð¾Ð±Ñ€Ð°Ð¶ÐµÐ½Ð¸Ñ Ð² ÐºÐ»Ð¸ÐµÐ½Ñ‚Ðµ
+            (void)UA_Server_setLimitState(server, loop->sensor.alarmConditionId, pv);
+
+			// Ð¢Ñ€Ð¸Ð³Ð³ÐµÑ€Ð¸Ð¼ ÑÐ¾Ð±Ñ‹Ñ‚Ð¸Ðµ Ð¸Ð·Ð¼ÐµÐ½ÐµÐ½Ð¸Ñ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ñ Ñ‚Ñ€ÐµÐ²Ð¾Ð³Ð¸
             (void)UA_Server_triggerConditionEvent(server,
-                loop->sensor.alarmConditionId, loop->sensor.objId, NULL);
+                loop->sensor.alarmConditionId,  /* ÐºÑ‚Ð¾ Ð³ÐµÐ½ÐµÑ€Ð¸Ñ‚: ÑÐ°Ð¼Ð° Condition (LimitAlarm) */
+                loop->sensor.objId,             /* Ð¸ÑÑ‚Ð¾Ñ‡Ð½Ð¸Ðº: Ð¾Ð±ÑŠÐµÐºÑ‚ Sensor */
+				NULL);                          /* Ð´Ð¾Ð¿Ð¾Ð»Ð½Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ñ‹Ðµ Ð´Ð°Ð½Ð½Ñ‹Ðµ Ð½Ðµ Ð½ÑƒÐ¶Ð½Ñ‹ */
         }
     }
 
-    /* Ðåàêöèÿ íà áëîêèðîâêè (ïðèîðèòåò HH > LL) â çàâèñèìîñòè îò ïîëèòèêà áåçîïàñíîñòè */
+	// Ð ÐµÐ°Ð³Ð¸Ñ€ÑƒÐµÐ¼ Ð½Ð° ÑÑ€Ð°Ð±Ð°Ñ‚Ñ‹Ð²Ð°Ð½Ð¸Ðµ Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²ÐºÐ¸, ÐµÑÐ»Ð¸ Ñ‚Ð°ÐºÐ¾Ð²Ð°Ñ Ð¸Ð¼ÐµÐµÑ‚ÑÑ
+	emergency_protection(loop, &ctrl);
 
-    // Ïðîâåðÿåì ôëàã ñðàáàòûâàíèÿ áëîêèðîâêè.
-    if (loop->sensor.state.highHigh) {
-        // Â ñëó÷àå ñðàáàòûâàíèÿ áëîêèðîâêè, äåéñòâóåì ñîãëàñíî ïðîïèñàííîé ïîëèòèêè áåçîïàñíîñòè.
-        switch ((PvFailAction)loop->valve.actionHH) {
-        case PVFAIL_HOLD:    /* îñòàâèòü ctrl êàê åñòü */ break;
-        case PVFAIL_TO_MAN:  loop->pid.mode = UA_FALSE; ctrl = loop->pid.manualoutput; break;
-        case PVFAIL_TO_SAFE: ctrl = loop->valve.safeOutputHH; break;
-        }
-    }
-    else if (loop->sensor.state.lowLow) {
-        switch ((PvFailAction)loop->valve.actionLL) {
-        case PVFAIL_HOLD:    break;
-        case PVFAIL_TO_MAN:  loop->pid.mode = UA_FALSE; ctrl = loop->pid.manualoutput; break;
-        case PVFAIL_TO_SAFE: ctrl = loop->valve.safeOutputLL; break;
-        }
-    }
-
-    /* Îãðàíè÷åíèå êîìàíä ôèçè÷åñêèìè ïðåäåëàìè êëàïàíà */
+    /* ÐžÐ³Ñ€Ð°Ð½Ð¸Ñ‡ÐµÐ½Ð¸Ðµ ÐºÐ¾Ð¼Ð°Ð½Ð´ Ñ„Ð¸Ð·Ð¸Ñ‡ÐµÑÐºÐ¸Ð¼Ð¸ Ð¿Ñ€ÐµÐ´ÐµÐ»Ð°Ð¼Ð¸ ÐºÐ»Ð°Ð¿Ð°Ð½Ð° */
     if (loop->valve.clampEnable) {
         ctrl = clampd(ctrl, loop->valve.outMin, loop->valve.outMax);
     }
 
-    /* Îòïðàâêà êîìàíäû è ôàêòè÷åñêèé îòêëèê */
+    /* ÐžÑ‚Ð¿Ñ€Ð°Ð²ÐºÐ° ÐºÐ¾Ð¼Ð°Ð½Ð´Ñ‹ Ð¸ Ñ„Ð°ÐºÑ‚Ð¸Ñ‡ÐµÑÐºÐ¸Ð¹ Ð¾Ñ‚ÐºÐ»Ð¸Ðº */
     loop->valve.command = ctrl;
     actuator_send(loop->valve.command);
 
     UA_Double fb = actuator_readback();
-    loop->valve.actual = (fb == fb) ? fb : loop->valve.command;  /* NaN-ïðîâåðêà: fb==fb */
+    loop->valve.actual = (fb == fb) ? fb : loop->valve.command;  /* NaN-Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ°: fb==fb */
 }
