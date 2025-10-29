@@ -1,12 +1,12 @@
-#pragma once
+﻿#pragma once
 
 #include <open62541/plugin/log_stdout.h>
 #include <open62541/types.h>
 #include <math.h>
 #include <open62541/server.h>
-#include "DAQ.h"
 #include <stdio.h>
 #include <open62541/server_config_default.h>
+#include "types.h"
 
 
 UA_NodeId addPIDControllerType(UA_Server* server);
