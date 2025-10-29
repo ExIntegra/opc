@@ -1,2 +1,2 @@
-#pragma once
-extern const char* DS18B20;  /* путь к w1_slave */
+п»ї#pragma once
+extern const char* DS18B20;

@@ -1,6 +1,10 @@
-#include <open62541/server.h>
-#include "DAQ.h"
+п»ї#include <open62541/server.h>
+#include "types.h"
 #include "opcuaSettings.h"
+#include "config.h"
+#include "DAQ.h"
+#include "init.h"
+
 
 
 ControlLoop controlLoop;
@@ -15,18 +19,18 @@ int main(void) {
 	sensor_init(&controlLoop.sensor);
 	valve_init(&controlLoop.valve);
 
-	addPIDControllerType(server); // Добавляем тип PIDControllerType
-    addSensorType(server);        // Добавляем тип SensorType
-	addValveType(server);         // Добавляем тип ValveType
+	addPIDControllerType(server); // Р”РѕР±Р°РІР»СЏРµРј С‚РёРї PIDControllerType
+    addSensorType(server);        // Р”РѕР±Р°РІР»СЏРµРј С‚РёРї SensorType
+	addValveType(server);         // Р”РѕР±Р°РІР»СЏРµРј С‚РёРї ValveType
 	UA_NodeId cellFolderId = UA_NODEID_NULL;
 
-	opc_ua_create_cell_folder(server, "TRCA1", &cellFolderId); // Создаем папку для ячейки TRCA1
-	opc_ua_create_pid_instance(server, cellFolderId, "PID", &controlLoop.pid);              // Создаем экземпляр PID контроллера
-	opc_ua_create_sensor_instance(server, cellFolderId, "Sensor", &controlLoop.sensor);     // Создаем экземпляр датчика
-    opc_ua_create_valve_instance(server, cellFolderId, "Valve", &controlLoop.valve);        // Создаем экземпляр клапана
+	opc_ua_create_cell_folder(server, "TRCA1", &cellFolderId); // РЎРѕР·РґР°РµРј РїР°РїРєСѓ РґР»СЏ СЏС‡РµР№РєРё TRCA1
+	opc_ua_create_pid_instance(server, cellFolderId, "PID", &controlLoop.pid);              // РЎРѕР·РґР°РµРј СЌРєР·РµРјРїР»СЏСЂ PID РєРѕРЅС‚СЂРѕР»Р»РµСЂР°
+	opc_ua_create_sensor_instance(server, cellFolderId, "Sensor", &controlLoop.sensor);     // РЎРѕР·РґР°РµРј СЌРєР·РµРјРїР»СЏСЂ РґР°С‚С‡РёРєР°
+    opc_ua_create_valve_instance(server, cellFolderId, "Valve", &controlLoop.valve);        // РЎРѕР·РґР°РµРј СЌРєР·РµРјРїР»СЏСЂ РєР»Р°РїР°РЅР°
 
-	UA_Server_addRepeatedCallback(server, tick, &controlLoop, 1000, &PID_1); // Добавляем колбэк tick с интервалом 1000 мс
-	UA_Server_runUntilInterrupt(server); // Запускаем сервер до прерывания
-	UA_Server_delete(server);			 // Удаляем сервер
+	UA_Server_addRepeatedCallback(server, tick, &controlLoop, config_dt, &PID_1); // Р”РѕР±Р°РІР»СЏРµРј РєРѕР»Р±СЌРє tick СЃ РёРЅС‚РµСЂРІР°Р»РѕРј config_dt
+	UA_Server_runUntilInterrupt(server); // Р—Р°РїСѓСЃРєР°РµРј СЃРµСЂРІРµСЂ РґРѕ РїСЂРµСЂС‹РІР°РЅРёСЏ
+	UA_Server_delete(server);			 // РЈРґР°Р»СЏРµРј СЃРµСЂРІРµСЂ
     return 0;
 }

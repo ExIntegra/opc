@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -149,19 +149,36 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="alarmsIsActive.c" />
-    <ClCompile Include="DAQ.c" />
-    <ClCompile Include="opcuaSettings.c" />
-    <ClCompile Include="pidCalculate.c" />
-    <ClCompile Include="sensorsAddress.c" />
-    <ClCompile Include="sensorsRead.c" />
+    <ClCompile Include="init.c" />
     <ClCompile Include="main.c" />
+    <ClCompile Include="DAQ.c">
+      <DeploymentContent>true</DeploymentContent>
+    </ClCompile>
+    <ClCompile Include="alarms_utils.c" />
+    <ClCompile Include="opcuaSettings.c" />
+    <ClCompile Include="pidCalculate.c">
+      <DeploymentContent>true</DeploymentContent>
+    </ClCompile>
+    <ClCompile Include="sensorsAddress.c" />
+    <ClCompile Include="sensorsRead.c">
+      <DeploymentContent>true</DeploymentContent>
+    </ClCompile>
+    <ClCompile Include="actuator.c" />
+    <ClCompile Include="config.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DAQ.h" />
-    <ClInclude Include="opcuaSettings.h" />
+    <ClInclude Include="alarms_utils.h" />
+    <ClInclude Include="init.h" />
+    <ClInclude Include="opcuaSettings.h">
+      <DeploymentContent>true</DeploymentContent>
+    </ClInclude>
+    <ClInclude Include="pidCalculate.h" />
     <ClInclude Include="sensorsAddress.h" />
+    <ClInclude Include="actuator.h" />
+    <ClInclude Include="config.h" />
     <ClInclude Include="sensorsRead.h" />
+    <ClInclude Include="types.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

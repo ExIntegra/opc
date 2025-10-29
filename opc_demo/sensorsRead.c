@@ -1,10 +1,6 @@
-#include "sensorsRead.h"
-#include "sensorsAddress.h"
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+﻿#include "sensorsRead.h"
 
-// ������ ����������� � DS18B20, �C � outC, ��� �������
+// Чтение температуры с DS18B20, °C в outC, получаем код статус прочтения датчика
 UA_StatusCode ds18b20_readC(double* outC) {
     FILE* f = fopen(DS18B20, "r");
     if (!f) return UA_STATUSCODE_BADNOTCONNECTED;
@@ -24,4 +20,17 @@ UA_StatusCode ds18b20_readC(double* outC) {
     long milli = strtol(p + 2, NULL, 10);
     *outC = (double)milli / 1000.0;
     return UA_STATUSCODE_GOOD;
+}
+
+// Функция чтения температуры с DS18B20 и обновления кэша CashSensor
+void read_ds18b20(CashSensor* sensor) {
+    UA_Double value;
+    UA_StatusCode rc = ds18b20_readC(&value);
+    if (rc == UA_STATUSCODE_GOOD) {
+        sensor->pv = value; // Обновляем значение PV
+        sensor->st = UA_STATUSCODE_GOOD; // Обновляем статус на GOOD
+    }
+    else {
+        sensor->st = rc; // Обновляем статус ошибки
+    }
 }

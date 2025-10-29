@@ -1,8 +1,9 @@
-﻿#include "DAQ.h"
+﻿#include "pidCalculate.h"
 
+// Расчет ПИД-регулятора.
 void pidCalculate(PIDControllerType* pid) {
-    /* шаг дискретизации тика (сейчас 100 мс в UA_Server_addRepeatedCallback) */
-    const double dt = 0.1;     // секунды
+    // Шаг дискретизации в секундах, задается в config.h в миллисекундах
+    const double dt = (double)config_dt / 1000.0;
 
     /* 1) ошибка */
     const double error = pid->setpoint - pid->processvalue;
@@ -27,12 +28,11 @@ void pidCalculate(PIDControllerType* pid) {
     /* 5) суммарный выход до внешних ограничений клапана */
     pid->output = p + i + d;
 
-    /*
+    /* //отладка
     printf("output: %f\n", pid->output);
-	printf("processvalue: %f\n", pid->processvalue);
-	printf("setpoint: %f\n", pid->setpoint);
+    printf("processvalue: %f\n", pid->processvalue);
+    printf("setpoint: %f\n", pid->setpoint);
     printf("P: %f, I: %f, D: %f\n", p, i, d);
-	printf("-----\n");*/
+    printf("-----\n");*/
 
 }
-
