@@ -4,33 +4,67 @@
 #include "config.h"
 #include "DAQ.h"
 #include "init.h"
-
-
+#include <open62541/server_config_default.h>
+#include "math_model.h"
 
 ControlLoop controlLoop;
-UA_UInt64 PID_1 = 0;
+Reactor reactor;
+ValveHandleControl valveRegulationConcentrationA, valveRegulationQ;
+ModelCtx modelCtx;
+Sensor sensorTemperature, sensorConcentrationA, sensorF, sensorConcentrationB;
 
 int main(void) {
 
     UA_Server* server = UA_Server_new();
-	UA_ServerConfig_setDefault(UA_Server_getConfig(server));
+	UA_ServerConfig* cfg = UA_Server_getConfig(server);
 
     pid_init(&controlLoop.pid);
+
 	sensor_init(&controlLoop.sensor);
+	sensor_init(&sensorConcentrationA);
+	sensor_init(&sensorConcentrationB);
+	sensor_init(&sensorF);
+
 	valve_init(&controlLoop.valve);
+	valve_handle_control_init(&valveRegulationConcentrationA);
+	valve_handle_control_init(&valveRegulationQ);
 
-	addPIDControllerType(server); // Добавляем тип PIDControllerType
-    addSensorType(server);        // Добавляем тип SensorType
-	addValveType(server);         // Добавляем тип ValveType
+	reactor_init(&reactor);
+
+	model_init(&modelCtx, &controlLoop.sensor, &sensorF, &sensorConcentrationA,
+		&sensorConcentrationB, &reactor, &valveRegulationConcentrationA, &valveRegulationQ);
+
+
+	addPIDControllerType(server); 
+    addSensorType(server);        
+	addValveType(server);         
+	addReactorType(server);        
+	addValveHandleControlType(server);
+
 	UA_NodeId cellFolderId = UA_NODEID_NULL;
+	UA_NodeId REACTORS = UA_NODEID_NULL;
+	UA_NodeId VALVES = UA_NODEID_NULL;
+	UA_NodeId SENSORS = UA_NODEID_NULL;
 
-	opc_ua_create_cell_folder(server, "TRCA1", &cellFolderId); // Создаем папку для ячейки TRCA1
-	opc_ua_create_pid_instance(server, cellFolderId, "PID", &controlLoop.pid);              // Создаем экземпляр PID контроллера
-	opc_ua_create_sensor_instance(server, cellFolderId, "Sensor", &controlLoop.sensor);     // Создаем экземпляр датчика
-    opc_ua_create_valve_instance(server, cellFolderId, "Valve", &controlLoop.valve);        // Создаем экземпляр клапана
+	opc_ua_create_cell_folder(server, "TRCA1", &cellFolderId);
+	opc_ua_create_cell_folder(server, "Reactors", &REACTORS);
+	opc_ua_create_cell_folder(server, "Valves", &VALVES);
+	opc_ua_create_cell_folder(server, "Sensors", &SENSORS);
 
-	UA_Server_addRepeatedCallback(server, tick, &controlLoop, config_dt, &PID_1); // Добавляем колбэк tick с интервалом config_dt
-	UA_Server_runUntilInterrupt(server); // Запускаем сервер до прерывания
-	UA_Server_delete(server);			 // Удаляем сервер
+	opc_ua_create_pid_instance(server, cellFolderId, "PID", &controlLoop.pid);
+	opc_ua_create_sensor_instance(server, cellFolderId, "Sensor", UA_TRUE,&controlLoop.sensor);
+	opc_ua_create_sensor_instance(server, SENSORS, "FRA-1", UA_FALSE, &sensorF); 
+	opc_ua_create_sensor_instance(server, SENSORS, "CRA-1", UA_FALSE, &sensorConcentrationA);
+	opc_ua_create_sensor_instance(server, SENSORS, "CRA-2", UA_FALSE, &sensorConcentrationB);
+    opc_ua_create_valve_instance(server, cellFolderId, "Valve", &controlLoop.valve);      
+	opc_ua_create_reactor_instance(server, REACTORS, "Reactor", &reactor);
+	opc_ua_create_valve_handle_control(server, VALVES, "HC-1", &valveRegulationConcentrationA);
+	opc_ua_create_valve_handle_control(server, VALVES, "HC-2", &valveRegulationQ);
+
+	UA_UInt64 cbModelId = 10000, cbTickId = 10000;
+	UA_Server_addRepeatedCallback(server, model_cb, &modelCtx, config_dt, &cbModelId);
+	//UA_Server_addRepeatedCallback(server, tick, &controlLoop, config_dt, &cbTickId);
+	UA_Server_runUntilInterrupt(server);
+	UA_Server_delete(server);
     return 0;
 }

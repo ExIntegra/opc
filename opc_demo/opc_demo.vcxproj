@@ -155,6 +155,7 @@
       <DeploymentContent>true</DeploymentContent>
     </ClCompile>
     <ClCompile Include="alarms_utils.c" />
+    <ClCompile Include="math_model.c" />
     <ClCompile Include="opcuaSettings.c" />
     <ClCompile Include="pidCalculate.c">
       <DeploymentContent>true</DeploymentContent>
@@ -170,6 +171,7 @@
     <ClInclude Include="DAQ.h" />
     <ClInclude Include="alarms_utils.h" />
     <ClInclude Include="init.h" />
+    <ClInclude Include="math_model.h" />
     <ClInclude Include="opcuaSettings.h">
       <DeploymentContent>true</DeploymentContent>
     </ClInclude>

@@ -105,11 +105,6 @@ void tick(UA_Server* server, void* ctx)
 
     if (!UA_NodeId_isNull(&loop->sensor.alarmConditionId)) {
         if (!pvGood) {
-            set_two_state_id(server, loop->sensor.alarmConditionId, "HighState", UA_FALSE);
-            set_two_state_id(server, loop->sensor.alarmConditionId, "HighHighState", UA_FALSE);
-            set_two_state_id(server, loop->sensor.alarmConditionId, "LowState", UA_FALSE);
-            set_two_state_id(server, loop->sensor.alarmConditionId, "LowLowState", UA_FALSE);
-
             update_active_flag(server, loop);
             set_severity(server, loop);
             set_message_alarm(server, loop); // ЗАМЕТКА. Создать функцию для сообщения о плохом PV.
@@ -119,11 +114,6 @@ void tick(UA_Server* server, void* ctx)
         }
         else {
             if (update_alarm_state_with_hyst(pv, &loop->sensor.limits, &loop->sensor.state)) {
-                set_two_state_id(server, loop->sensor.alarmConditionId, "HighState", loop->sensor.state.high);
-                set_two_state_id(server, loop->sensor.alarmConditionId, "HighHighState", loop->sensor.state.highHigh);
-                set_two_state_id(server, loop->sensor.alarmConditionId, "LowState", loop->sensor.state.low);
-                set_two_state_id(server, loop->sensor.alarmConditionId, "LowLowState", loop->sensor.state.lowLow);
-
                 update_active_flag(server, loop);
                 set_severity(server, loop);
                 set_message_alarm(server, loop);
