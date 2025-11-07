@@ -21,15 +21,27 @@ void valve_init(Valve* v) {
     v->actual_position = v->command;
 }
 
+void reactor_init(Reactor* r) {
+    r->name = UA_STRING_NULL;
+    r->objId = UA_NODEID_NULL;
+    r->volume = 1000.0;
+}
+
+void valve_handle_control_init(ValveHandleControl* vhc) {
+    vhc->name = UA_STRING_NULL;
+    vhc->objId = UA_NODEID_NULL;
+    vhc->manualoutput = 0.0;
+}
+
 // Инициализация датчика
 void sensor_init(Sensor* s) {
     cash_init(&s->io);
     s->name = UA_STRING_NULL;
     s->limits.low = 0.0;
     s->limits.lowLow = 0.0;
-    s->limits.high = 100.0;
-    s->limits.highHigh = 100.0;
-    s->limits.hysteresis = 1.0;
+    s->limits.high = 0.0;
+    s->limits.highHigh = 0.0;
+    s->limits.hysteresis = 0.0;
     s->state.low = UA_FALSE;
     s->state.lowLow = UA_FALSE;
     s->state.high = UA_FALSE;
@@ -41,6 +53,23 @@ void sensor_init(Sensor* s) {
     s->limits.priorityLowLowAlarm = 1000;
     s->limits.priorityHighHighAlarm = 1000;
     s->limits.priorityNormal = 0;
+}
+
+void model_init(ModelCtx* m, Sensor* sensorTemperature, Sensor* sensorF, Sensor* sensorConcentrationA,
+    Sensor* sensorConcentrationB, Reactor* reactor, ValveHandleControl* valveRegulationConcentrationA,
+    ValveHandleControl* valveRegulationQ) {
+    m->reactor = reactor;
+	m->valveRegulationQ = valveRegulationQ;
+	m->valveRegulationConcentrationA = valveRegulationConcentrationA;
+    m->sensorTemperature = sensorTemperature;
+    m->sensorF = sensorF;
+    m->sensorConcentrationA = sensorConcentrationA;
+    m->sensorConcentrationB = sensorConcentrationB;
+    m->cfg.R = 8.314;
+    m->cfg.k01 = 2.0e13;
+    m->cfg.k02 = 9.0e15;
+    m->cfg.EA1 = 74000.0;
+    m->cfg.EA2 = 89000.0;
 }
 
 // Инициализация ПИД-регулятора

@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include <open62541/types.h>
+
 // Поведение исполняющего органа при отказе датчика.
 typedef enum {
     PVFAIL_HOLD = 0,   /* держать прошлый output */
@@ -57,21 +59,35 @@ typedef struct {
     UA_Double safeOutputLL; // Безопасный выход при срабатывании LowLow
 } Valve;
 
+typedef struct {
+	UA_NodeId objId;  // NodeId объекта реактора в адресном пространстве
+	UA_Double volume;
+	UA_String name;
+} Reactor;
+
 // Кэш датчика
 typedef struct {
     UA_Double     pv;
     UA_StatusCode st;
 } CashSensor;
 
+typedef struct {
+	UA_Double manualoutput;
+	UA_NodeId objId;
+	UA_String name;
+} ValveHandleControl;
+
 // Датчик
 typedef struct {
     UA_String   name;
+    UA_Boolean  alarmsEnabled;
     CashSensor  io;
     AlarmLimits limits;
     AlarmState  state;
     UA_NodeId   objId;            // NodeId объекта датчика в адресном пространстве
     UA_NodeId   alarmConditionId; // NodeId ConditionType для сигнализации
 } Sensor;
+
 
 // ПИД-регулятор
 typedef struct {
@@ -89,6 +105,26 @@ typedef struct {
     UA_Double  lastError;
     UA_Boolean mode;
 } PIDControllerType;
+
+typedef struct {
+	UA_Double k01;
+	UA_Double EA1;
+	UA_Double k02;
+	UA_Double EA2;
+    UA_Double R;
+} ConfigMathModel;
+
+typedef struct {
+    Reactor* reactor;
+    Sensor
+        * sensorTemperature,
+        * sensorF,
+        * sensorConcentrationA,
+        * sensorConcentrationB;
+    ConfigMathModel cfg;
+	ValveHandleControl* valveRegulationConcentrationA;
+	ValveHandleControl* valveRegulationQ;
+} ModelCtx;
 
 // Контрольный контур управления
 typedef struct {
