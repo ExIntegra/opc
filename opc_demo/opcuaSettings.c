@@ -14,10 +14,8 @@ static UA_StatusCode readDoubleDS(UA_Server* server,
     const UA_NumericRange* range,
     UA_DataValue* out) {
 
-    (void)server;
     (void)sessionId;
     (void)sessionContext;
-    (void)nodeId;
 
     UA_DataValue_init(out);
 
@@ -33,10 +31,11 @@ static UA_StatusCode readDoubleDS(UA_Server* server,
         return out->status;
     }
 
-    /* Приводим nodeContext к типу double и разыменовываем указатель */
+    /* читаем значение из nodeContext */
     const UA_Double v = *(const UA_Double*)nodeContext;
 
-    UA_StatusCode rv = UA_Variant_setScalarCopy(&out->value, &v, &UA_TYPES[UA_TYPES_DOUBLE]);
+    UA_StatusCode rv =
+        UA_Variant_setScalarCopy(&out->value, &v, &UA_TYPES[UA_TYPES_DOUBLE]);
     if (rv != UA_STATUSCODE_GOOD) {
         out->status = rv;
         out->hasStatus = true;
@@ -55,8 +54,10 @@ static UA_StatusCode readDoubleDS(UA_Server* server,
 
     out->status = UA_STATUSCODE_GOOD;
     out->hasStatus = true;
+    
     return UA_STATUSCODE_GOOD;
 }
+
 
 
 /* Функция для записи данных в узлы (свойства) экземпляра регулятора. Работает
@@ -96,6 +97,27 @@ static UA_StatusCode writeDoubleDS(UA_Server* server,
 
     /* Записываем по адресу, переданному через nodeContext */
     *(UA_Double*)nodeContext = v;
+    if (server && nodeId) {
+        UA_QualifiedName bn;
+        UA_StatusCode rc = UA_Server_readBrowseName(server, *nodeId, &bn);
+        if (rc == UA_STATUSCODE_GOOD) {
+            printf("readDoubleDS: %.*s = %.3f\n",
+                (int)bn.name.length, bn.name.data, v);
+            UA_QualifiedName_clear(&bn);
+        }
+        else {
+            /* fallback: печатаем NodeId, если browseName не прочитали */
+            if (nodeId->identifierType == UA_NODEIDTYPE_NUMERIC) {
+                printf("readDoubleDS: ns=%u;i=%u = %.3f\n",
+                    nodeId->namespaceIndex,
+                    nodeId->identifier.numeric,
+                    v);
+            }
+            else {
+                printf("readDoubleDS: <unknown node> = %.3f\n", v);
+            }
+        }
+    }
     return UA_STATUSCODE_GOOD;
 }
 
@@ -511,12 +533,86 @@ static UA_StatusCode add_reference_mandatory(UA_Server* server, UA_NodeId nodeId
         true);
 }
 
-// Глобальная переменная для хранения NodeId типа PIDControllerType
+// Глобальная переменная для хранения NodeId
 UA_NodeId pidControllerTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1001 } };
 UA_NodeId sensorTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1002 } };
 UA_NodeId valveTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1003 } };
+UA_NodeId reactorTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1004 } };
+UA_NodeId valveHandleControlType = { 1, UA_NODEIDTYPE_NUMERIC, { 1005 } };
 
-// Функция для создания типа ValveType
+UA_NodeId addValveHandleControlType(UA_Server* server) {
+    UA_ObjectTypeAttributes varAttr = UA_ObjectTypeAttributes_default;
+    varAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ValveHandleControlType");
+    UA_Server_addObjectTypeNode(server,
+        UA_NODEID_NUMERIC(1, 1005),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
+        UA_QUALIFIEDNAME(1, "ValveHandleControlType"),
+        varAttr, NULL, &valveHandleControlType);
+
+	UA_VariableAttributes nameAttr = UA_VariableAttributes_default;
+	nameAttr.displayName = UA_LOCALIZEDTEXT("en-US", "NAME");
+	nameAttr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+	nameAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
+	UA_NodeId nameId;
+	UA_Server_addVariableNode(server, UA_NODEID_NULL, valveHandleControlType,
+		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+		UA_QUALIFIEDNAME(1, "NAME"),
+		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+		nameAttr, NULL, &nameId);
+	add_reference_mandatory(server, nameId);
+
+	UA_VariableAttributes manualOutputAttr = UA_VariableAttributes_default;
+	manualOutputAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MANUAL_OUTPUT");
+	manualOutputAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+	manualOutputAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+	UA_NodeId manualOutputId;
+
+	UA_Server_addVariableNode(server, UA_NODEID_NULL, valveHandleControlType,
+		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+		UA_QUALIFIEDNAME(1, "MANUAL_OUTPUT"),
+		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+		manualOutputAttr, NULL, &manualOutputId);
+	add_reference_mandatory(server, manualOutputId);
+    return valveHandleControlType;
+}
+
+UA_NodeId addReactorType(UA_Server* server) {
+    UA_ObjectTypeAttributes varAttr = UA_ObjectTypeAttributes_default;
+    varAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ReactorType");
+    UA_Server_addObjectTypeNode(server,
+        UA_NODEID_NUMERIC(1, 1004),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
+        UA_QUALIFIEDNAME(1, "ReactorType"),
+        varAttr, NULL, &reactorTypeId);
+
+    UA_VariableAttributes nameAttr = UA_VariableAttributes_default;
+    nameAttr.displayName = UA_LOCALIZEDTEXT("en-US", "NAME");
+    nameAttr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+    nameAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
+    UA_NodeId nameId;
+    UA_Server_addVariableNode(server, UA_NODEID_NULL, reactorTypeId,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+        UA_QUALIFIEDNAME(1, "NAME"),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+        nameAttr, NULL, &nameId);
+    add_reference_mandatory(server, nameId);
+
+    UA_VariableAttributes reactorAttr = UA_VariableAttributes_default;
+    reactorAttr.displayName = UA_LOCALIZEDTEXT("en-US", "REACTOR_VOLUME");
+    reactorAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+    reactorAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    UA_NodeId reactorId;
+    UA_Server_addVariableNode(server, UA_NODEID_NULL, reactorTypeId,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+        UA_QUALIFIEDNAME(1, "REACTOR_VOLUME"),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+        reactorAttr, NULL, &reactorId);
+    add_reference_mandatory(server, reactorId);
+    return reactorTypeId;
+}
+
 UA_NodeId addValveType(UA_Server* server) {
     UA_ObjectTypeAttributes varAttr = UA_ObjectTypeAttributes_default;
     varAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ValveType");
@@ -915,6 +1011,28 @@ UA_NodeId addPIDControllerType(UA_Server* server) {
     return pidControllerTypeId;
 }
 
+UA_StatusCode opc_ua_create_valve_handle_control(UA_Server* server,
+    UA_NodeId parentFolder, const char* valveHandleControlName, ValveHandleControl* valveHandleControl) {
+    UA_NodeId valveHandleControlObjId;
+    UA_StatusCode rc = UA_Server_addObjectNode(server,
+        UA_NODEID_NULL,           // Генерация ID
+        parentFolder,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),       // Тип связи (Optional)
+        UA_QUALIFIEDNAME(1, (char*)valveHandleControlName),    // Имя клапана (например Valve1)
+        valveHandleControlType,      // Тип объекта ValveHandleControlType
+        UA_ObjectAttributes_default, NULL, &valveHandleControlObjId);  // Атрибуты по умолчанию
+    if (rc != UA_STATUSCODE_GOOD) {
+        printf("Failed to add object valve handle control %s\n", valveHandleControlName);
+        return rc;
+    }
+    else {
+        printf("Valve Handle Control %s created successfully\n", valveHandleControlName);
+    }
+    valveHandleControl->objId = valveHandleControlObjId;
+    // Привязываем переменные ValveHandleControl из объекта к полям структуры ValveHandleControl
+    rc = attach_child_double(server, valveHandleControlObjId, "MANUAL_OUTPUT", &valveHandleControl->manualoutput); if (rc) return rc;
+    return UA_STATUSCODE_GOOD;
+}
 
 /* --- Функция для создания объекта PID из типа PIDControllerType --- */
 UA_StatusCode opc_ua_create_pid_instance(UA_Server* server, UA_NodeId parentFolder ,const char* pidName, PIDControllerType* pid) {
@@ -945,68 +1063,126 @@ UA_StatusCode opc_ua_create_pid_instance(UA_Server* server, UA_NodeId parentFold
     return UA_STATUSCODE_GOOD;
 }
 
-UA_StatusCode opc_ua_create_sensor_instance(UA_Server* server, UA_NodeId parentFolder, const char* sensorName, Sensor* sensor) {
-    UA_NodeId sensorObjId;
+UA_StatusCode opc_ua_create_reactor_instance(UA_Server* server,
+    UA_NodeId parentFolder ,const char* reactorName, Reactor* reactor) {
+    UA_NodeId reactorObjId;
     UA_StatusCode rc = UA_Server_addObjectNode(server,
         UA_NODEID_NULL,           // Генерация ID
         parentFolder,
         UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),       // Тип связи (Optional)
-        UA_QUALIFIEDNAME(1, (char*)sensorName),    // Имя сенсора (например Sensor1)
-        sensorTypeId,      // Тип объекта SensorType
-        UA_ObjectAttributes_default, NULL, &sensorObjId);  // Атрибуты по умолчанию
+        UA_QUALIFIEDNAME(1, (char*)reactorName),    // Имя реактора (например Reactor1)
+        reactorTypeId,      // Тип объекта ReactorType
+        UA_ObjectAttributes_default, NULL, &reactorObjId);  // Атрибуты по умолчанию
+    if (rc != UA_STATUSCODE_GOOD) {
+        printf("Failed to add object reactor %s\n", reactorName);
+        return rc;
+    }
+    else {
+        printf("Reactor %s created successfully\n", reactorName);
+    }
+    reactor->objId = reactorObjId;
+    // Привязываем переменные Reactor из объекта к полям структуры Reactor
+    rc = attach_child_double(server, reactorObjId, "REACTOR_VOLUME", &reactor->volume); if (rc) return rc;
+    return UA_STATUSCODE_GOOD;
+}
 
+UA_StatusCode opc_ua_create_sensor_instance(UA_Server* server,
+    UA_NodeId parentFolder, const char* sensorName,
+    UA_Boolean enableAlarms,
+    Sensor* sensor)
+{
+    /* 1) Создаём объект SENSOR из вашего SensorType */
+    UA_NodeId sensorObjId;
+    UA_StatusCode rc = UA_Server_addObjectNode(server,
+        UA_NODEID_NULL,
+        parentFolder,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
+        UA_QUALIFIEDNAME(1, (char*)sensorName),
+        sensorTypeId, /* ваш тип */
+        UA_ObjectAttributes_default, NULL, &sensorObjId);
     if (rc != UA_STATUSCODE_GOOD) {
         printf("Failed to add object sensor %s\n", sensorName);
         return rc;
     }
-
     else {
-		printf("Sensor %s created successfully\n", sensorName);
+        printf("Sensor %s created successfully\n", sensorName);
     }
-	sensor->objId = sensorObjId;
-    // Привязываем переменные Sensor из объекта к полям структуры CashSensor
-    rc = attach_child_double(server, sensorObjId, "PROCESS_VALUE", &sensor->io.pv); if (rc) return rc;
-    rc = attach_child_double(server, sensorObjId, "SET_LOW", &sensor->limits.low); if (rc) return rc;
-    rc = attach_child_double(server, sensorObjId, "SET_HIGH", &sensor->limits.high); if (rc) return rc;
-    rc = attach_child_double(server, sensorObjId, "SET_LOW_LOW", &sensor->limits.lowLow); if (rc) return rc;
-    rc = attach_child_double(server, sensorObjId, "SET_HIGH_HIGH", &sensor->limits.highHigh); if (rc) return rc;
-    rc = attach_child_UInt32(server, sensorObjId, "STATUS", &sensor->io.st); if (rc) return rc;
-	rc = attach_child_double(server, sensorObjId, "HYSTERESIS", &sensor->limits.hysteresis); if (rc) return rc;
-    rc = attach_child_bool(server, sensorObjId, "ALARM_LOW", &sensor->state.low); if (rc) return rc;
-	rc = attach_child_bool(server, sensorObjId, "ALARM_HIGH", &sensor->state.high); if (rc) return rc;
-	rc = attach_child_bool(server, sensorObjId, "ALARM_LOW_LOW", &sensor->state.lowLow); if (rc) return rc;
-	rc = attach_child_bool(server, sensorObjId, "ALARM_HIGH_HIGH", &sensor->state.highHigh); if (rc) return rc;
 
-    /* === NonExclusiveLimitAlarmType на экземпляре датчика === */
+    sensor->objId = sensorObjId;
     sensor->alarmConditionId = UA_NODEID_NULL;
+    sensor->alarmsEnabled = enableAlarms;
+
+    /* 2) Привязываем переменные SENSOR к полям структуры */
+    rc = attach_child_double(server, sensorObjId, "PROCESS_VALUE", &sensor->io.pv);            if (rc) return rc;
+    rc = attach_child_double(server, sensorObjId, "SET_LOW", &sensor->limits.low);             if (rc) return rc;
+    rc = attach_child_double(server, sensorObjId, "SET_HIGH", &sensor->limits.high);           if (rc) return rc;
+    rc = attach_child_double(server, sensorObjId, "SET_LOW_LOW", &sensor->limits.lowLow);      if (rc) return rc;
+    rc = attach_child_double(server, sensorObjId, "SET_HIGH_HIGH", &sensor->limits.highHigh);  if (rc) return rc;
+    rc = attach_child_UInt32(server, sensorObjId, "STATUS", &sensor->io.st);                   if (rc) return rc;
+    rc = attach_child_double(server, sensorObjId, "HYSTERESIS", &sensor->limits.hysteresis);   if (rc) return rc;
+    rc = attach_child_bool(server, sensorObjId, "ALARM_LOW", &sensor->state.low);              if (rc) return rc;
+    rc = attach_child_bool(server, sensorObjId, "ALARM_HIGH", &sensor->state.high);            if (rc) return rc;
+    rc = attach_child_bool(server, sensorObjId, "ALARM_LOW_LOW", &sensor->state.lowLow);       if (rc) return rc;
+    rc = attach_child_bool(server, sensorObjId, "ALARM_HIGH_HIGH", &sensor->state.highHigh);   if (rc) return rc;
+
+    /* 3) Если тревоги не нужны — выходим */
+    if (!enableAlarms) {
+        /* на всякий случай глушим события у узла сенсора */
+        UA_Byte ev = 0;
+        (void)UA_Server_writeEventNotifier(server, sensorObjId, ev);
+        sensor->alarmConditionId = UA_NODEID_NULL;
+        return UA_STATUSCODE_GOOD;
+    }
+
+    /* 4) Создаём Condition NonExclusiveLimitAlarmType как дочерний узел сенсора */
     UA_StatusCode rcA = UA_Server_createCondition(
         server,
         UA_NODEID_NULL,
         UA_NODEID_NUMERIC(0, UA_NS0ID_NONEXCLUSIVELIMITALARMTYPE),
-        UA_QUALIFIEDNAME(1, "LimitAlarm"),
+        UA_QUALIFIEDNAME(1, "PV_LimitAlarm"),
         sensorObjId,
         UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
         &sensor->alarmConditionId);
 
-    if (rcA == UA_STATUSCODE_GOOD) {
-        UA_Boolean en = UA_TRUE, ret = UA_TRUE;
-        UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
-            UA_QUALIFIEDNAME(0, "EnabledState/Id"), &en, &UA_TYPES[UA_TYPES_BOOLEAN]);
-        UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
-            UA_QUALIFIEDNAME(0, "Retain"), &ret, &UA_TYPES[UA_TYPES_BOOLEAN]);
-
-        // Стартовые пределы
-        UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
-            UA_QUALIFIEDNAME(0, "HighLimit"), &sensor->limits.high, &UA_TYPES[UA_TYPES_DOUBLE]);
-        UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
-            UA_QUALIFIEDNAME(0, "HighHighLimit"), &sensor->limits.highHigh, &UA_TYPES[UA_TYPES_DOUBLE]);
-        UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
-            UA_QUALIFIEDNAME(0, "LowLimit"), &sensor->limits.low, &UA_TYPES[UA_TYPES_DOUBLE]);
-        UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
-            UA_QUALIFIEDNAME(0, "LowLowLimit"), &sensor->limits.lowLow, &UA_TYPES[UA_TYPES_DOUBLE]);
+    if (rcA != UA_STATUSCODE_GOOD) {
+        printf("CreateCondition failed: %s\n", UA_StatusCode_name(rcA));
+        sensor->alarmConditionId = UA_NODEID_NULL; /* продолжаем без тревог */
+        return UA_STATUSCODE_GOOD;
     }
+
+    /* 5) Включаем Condition: EnabledState/Id = true */
+    {
+        UA_Boolean en = UA_TRUE;
+        UA_Variant v; UA_Variant_setScalar(&v, &en, &UA_TYPES[UA_TYPES_BOOLEAN]);
+        (void)UA_Server_setConditionVariableFieldProperty(
+            server, sensor->alarmConditionId, &v,
+            UA_QUALIFIEDNAME(0, "EnabledState"),
+            UA_QUALIFIEDNAME(0, "Id"));
+    }
+
+    /* 6) Retain = true и SourceNode = SENSOR */
+    {
+        UA_Boolean retain = UA_TRUE;
+        UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
+            UA_QUALIFIEDNAME(0, "Retain"), &retain, &UA_TYPES[UA_TYPES_BOOLEAN]);
+
+        UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
+            UA_QUALIFIEDNAME(0, "SourceNode"), &sensorObjId, &UA_TYPES[UA_TYPES_NODEID]);
+    }
+
+    /* 7) Инициализируем лимиты для LimitAlarm */
+    UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
+        UA_QUALIFIEDNAME(0, "HighLimit"), &sensor->limits.high, &UA_TYPES[UA_TYPES_DOUBLE]);
+    UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
+        UA_QUALIFIEDNAME(0, "HighHighLimit"), &sensor->limits.highHigh, &UA_TYPES[UA_TYPES_DOUBLE]);
+    UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
+        UA_QUALIFIEDNAME(0, "LowLimit"), &sensor->limits.low, &UA_TYPES[UA_TYPES_DOUBLE]);
+    UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
+        UA_QUALIFIEDNAME(0, "LowLowLimit"), &sensor->limits.lowLow, &UA_TYPES[UA_TYPES_DOUBLE]);
+
     return UA_STATUSCODE_GOOD;
 }
+
 
 UA_StatusCode opc_ua_create_valve_instance(UA_Server* server,
     UA_NodeId parentFolder ,const char* valveName, Valve* valve) {
@@ -1047,6 +1223,7 @@ UA_StatusCode opc_ua_create_cell_folder(UA_Server* server,
     UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
     oAttr.displayName = UA_LOCALIZEDTEXT("en-US", (char*)cellName);
 
+    printf("create");
     return UA_Server_addObjectNode(server,
         UA_NODEID_NULL,
         UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
