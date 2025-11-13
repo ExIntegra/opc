@@ -6,8 +6,9 @@ double compute_CB(Reactor reactor, Sensor sensorTemperature,
     ConfigMathModel config, Sensor sensorQ, Sensor sensorConcentrationA)
 {
     const double R = config.R;
-    const double T_K = 16.0 + 273.15; //sensorTemperature.io.pv + 273.15;
-
+    printf("Получаю температуру\n...");
+    const double T_K = sensorTemperature.io.pv + 273.15;
+    printf("Получил T: %.2f\n", sensorTemperature.io.pv);
     if (!isfinite(T_K) || T_K <= 0.0) {
         printf("Invalid temperature T=%.9f\n", T_K);
         return NAN;
@@ -29,7 +30,7 @@ double compute_CB(Reactor reactor, Sensor sensorTemperature,
     }
 
     const double num = 2.0 * Vr * k1 * Q * CA;
-    printf("T=%.9f Q=%.9f Vr=%.9f CA=%.9f\n",
+    printf("T=%.2f Q=%.2f Vr=%.2f CA=%.2f\n",
 		T_K, Q, Vr, CA);
     printf("k1=%.9f k2=%.9f a=%.9f b=%.9f num=%.9f CB=%.12f\n",
         k1, k2, a, b, num, num / (a * b));
@@ -43,14 +44,13 @@ void model_cb(UA_Server* server, void* data) {
     ModelCtx* m = (ModelCtx*)data;
     m->sensorConcentrationA->io.pv = (m->valveRegulationConcentrationA->manualoutput) / 100.0;
 	m->sensorF->io.pv = valve_characteristic(m->valveRegulationQ->manualoutput);
+    m->sensorConcentrationA->io.pv = valve_characteristicCA(m->valveRegulationConcentrationA->manualoutput);
     double y = compute_CB(*m->reactor, *m->sensorTemperature, m->cfg, *m->sensorF, *m->sensorConcentrationA);
 
     if (isfinite(y) && y >= 0.0)
         m->sensorConcentrationB->io.pv = y;
 }
 
-// u: 0..100 (% открытия клапана)
-// Возвращает Q в диапазоне 0..160
 static double valve_characteristic(double u) {
     if (u <= 0.0)
         return 0.0;
@@ -68,5 +68,21 @@ static double valve_characteristic(double u) {
         // Q(70) = 144, Q(100) = 160
         double x = (u - 70.0) / 30.0; // 0..1
         return 144.0 + 16.0 * x;      // линейно, маленький наклон
+    }
+}
+
+static double valve_characteristicCA(double u) {
+    if (u <= 0.0)
+        return 0.0;
+    if (u >= 100.0)
+        return 0.9;
+
+    if (u <= 70.0) {
+        double x = u / 70.0;          // 0..1
+        return 0.7 * x * x;
+    }
+    else {
+        double x = (u - 70.0) / 30.0; // 0..1
+        return 0.7 + 0.2 * x;
     }
 }

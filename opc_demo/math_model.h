@@ -7,3 +7,4 @@
 double compute_CB(Reactor reactor, Sensor sensorPIDTemperature, ConfigMathModel config, Sensor sensorQ, Sensor sensorConcentrationA);
 void model_cb(UA_Server* server, void* data);
 static double valve_characteristic(double u);
+static double valve_characteristicCA(double u);

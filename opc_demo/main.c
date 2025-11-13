@@ -63,7 +63,7 @@ int main(void) {
 
 	UA_UInt64 cbModelId = 10000, cbTickId = 10000;
 	UA_Server_addRepeatedCallback(server, model_cb, &modelCtx, config_dt, &cbModelId);
-	//UA_Server_addRepeatedCallback(server, tick, &controlLoop, config_dt, &cbTickId);
+	UA_Server_addRepeatedCallback(server, tick, &controlLoop, config_dt, &cbTickId);
 	UA_Server_runUntilInterrupt(server);
 	UA_Server_delete(server);
     return 0;
