@@ -88,6 +88,7 @@ void tick(UA_Server* server, void* ctx)
     UA_Double ctrl;
     ControlLoop* loop = (ControlLoop*)ctx;
 
+    printf("Вызов функции read_ds18b20.\n");
     read_ds18b20(&loop->sensor.io);
 
     const UA_Double     pv = loop->sensor.io.pv;
@@ -96,11 +97,16 @@ void tick(UA_Server* server, void* ctx)
 
     if (pvGood && loop->pid.mode) {
         loop->pid.processvalue = pv;
+        printf("Степень открытия клапана в автоматическом управление.\n");
+        printf("Вызов функции pidCalculate.\n");
+        printf("MODE: AUTO.\n");
         pidCalculate(&loop->pid);
         ctrl = loop->pid.output;
     }
     else {
         ctrl = loop->pid.manualoutput;
+        printf("Степень открытия клапана в ручном управление.\n");
+        printf("MODE: MAN.\n");
     }
 
     if (!UA_NodeId_isNull(&loop->sensor.alarmConditionId)) {
@@ -133,7 +139,7 @@ void tick(UA_Server* server, void* ctx)
         UA_Double hi = loop->valve.outMax;
         if (hi < lo) { UA_Double t = lo; lo = hi; hi = t; } // авто-починка конфигурации
         ctrl = clampd(ctrl, lo, hi);
-        printf("Значение клапана после ограничения clampd: %.2f, ctrl\n");
+        printf("Значение клапана после ограничения clampd: %.2f, ctrl\n", ctrl);
     }
 
     printf("Передаем степень открытия клапана %.2f в command и actual pos\n", ctrl);

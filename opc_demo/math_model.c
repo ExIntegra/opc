@@ -6,7 +6,7 @@ double compute_CB(Reactor reactor, Sensor sensorTemperature,
     ConfigMathModel config, Sensor sensorQ, Sensor sensorConcentrationA)
 {
     const double R = config.R;
-    printf("Получаю температуру\n...");
+    printf("Получаю температуру...\n");
     const double T_K = sensorTemperature.io.pv + 273.15;
     printf("Получил T: %.2f\n", sensorTemperature.io.pv);
     if (!isfinite(T_K) || T_K <= 0.0) {
@@ -30,6 +30,7 @@ double compute_CB(Reactor reactor, Sensor sensorTemperature,
     }
 
     const double num = 2.0 * Vr * k1 * Q * CA;
+    printf("Результаты математической модели: \n");
     printf("T=%.2f Q=%.2f Vr=%.2f CA=%.2f\n",
 		T_K, Q, Vr, CA);
     printf("k1=%.9f k2=%.9f a=%.9f b=%.9f num=%.9f CB=%.12f\n",
