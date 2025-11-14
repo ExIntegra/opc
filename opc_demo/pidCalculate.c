@@ -29,7 +29,7 @@ void pidCalculate(PIDControllerType* pid) {
     /* 5) суммарный выход до внешних ограничений клапана */
     pid->output = p + i + d;
 
-    printf("Значения ПИД-регулятора:");
+    printf("Значения ПИД-регулятора:\n");
     printf("output: %f\n", pid->output);
     printf("processvalue: %f\n", pid->processvalue);
     printf("setpoint: %f\n", pid->setpoint);
