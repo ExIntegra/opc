@@ -5,14 +5,14 @@
 UA_StatusCode ds18b20_readC(double* outC) {
     FILE* f = fopen(DS18B20, "r");
     if (!f) {
-        printf("UA_STATUSCODE_BADNOTCONNECTED. NOT OPEN FILE");
+        printf("UA_STATUSCODE_BADNOTCONNECTED. NOT OPEN FILE\n");
         return UA_STATUSCODE_BADNOTCONNECTED;
     }
 
     char l1[128], l2[128];
     if (!fgets(l1, sizeof l1, f) || !fgets(l2, sizeof l2, f)) {
         fclose(f);
-        printf("UA_STATUSCODE_BADUNEXPECTEDERROR    ");
+        printf("UA_STATUSCODE_BADUNEXPECTEDERROR\n");
         return UA_STATUSCODE_BADUNEXPECTEDERROR;
     }
     fclose(f);
@@ -32,7 +32,7 @@ UA_StatusCode ds18b20_readC(double* outC) {
 // Функция чтения температуры с DS18B20 и обновления кэша CashSensor
 void read_ds18b20(CashSensor* sensor) {
     UA_Double value;
-    printf("read ds18b20\n");
+    printf("Чтение датчика температуры.\n");
     UA_StatusCode rc = ds18b20_readC(&value);
     if (rc == UA_STATUSCODE_GOOD) {
         sensor->pv = value; // Обновляем значение PV

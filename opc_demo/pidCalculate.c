@@ -1,4 +1,5 @@
 ﻿#include "pidCalculate.h"
+#include <stdio.h>
 
 // Расчет ПИД-регулятора.
 void pidCalculate(PIDControllerType* pid) {
@@ -28,11 +29,10 @@ void pidCalculate(PIDControllerType* pid) {
     /* 5) суммарный выход до внешних ограничений клапана */
     pid->output = p + i + d;
 
-    /* //отладка
+    printf("Значения ПИД-регулятора:");
     printf("output: %f\n", pid->output);
     printf("processvalue: %f\n", pid->processvalue);
     printf("setpoint: %f\n", pid->setpoint);
     printf("P: %f, I: %f, D: %f\n", p, i, d);
-    printf("-----\n");*/
-
+    printf("-----\n");
 }

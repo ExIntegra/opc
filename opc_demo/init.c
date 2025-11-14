@@ -10,7 +10,7 @@ void cash_init(CashSensor* t) {
 void valve_init(Valve* v) {
     v->name = UA_STRING_NULL;
     v->objId = UA_NODEID_NULL;
-    v->clampEnable = UA_FALSE;
+    v->clampEnable = UA_TRUE;
     v->outMin = 0.0;
     v->outMax = 100.0;
     v->command = 0.0;
