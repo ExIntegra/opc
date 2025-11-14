@@ -14,8 +14,8 @@ double compute_CB(Reactor reactor, Sensor sensorTemperature,
         return NAN;
     }
 
-	const double Q = sensorQ.io.pv * 1e-3 / 60.0; // м³/с
-    const double Vr = reactor.volume * 1e-3; // м³
+	const double Q = sensorQ.io.pv * 1e-3 / 60.0; // м3/с
+    const double Vr = reactor.volume * 1e-3; // м3
     const double CA = sensorConcentrationA.io.pv;
 
     const double k1 = (config.k01 / 60.0) * exp(-config.EA1 / (R * T_K));
@@ -35,7 +35,8 @@ double compute_CB(Reactor reactor, Sensor sensorTemperature,
 		T_K, Q, Vr, CA);
     printf("k1=%.9f k2=%.9f a=%.9f b=%.9f num=%.9f CB=%.12f\n",
         k1, k2, a, b, num, num / (a * b));
-	printf("----\n");
+    printf("----------------------------------------------------------");
+	printf("\n\n\n");
 
     return num / (a * b);
 }

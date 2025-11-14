@@ -5,7 +5,7 @@
 UA_StatusCode ds18b20_readC(double* outC) {
     FILE* f = fopen(DS18B20, "r");
     if (!f) {
-        printf("Значения датчика температуры ds18b20 не получены:");
+        printf("Значения датчика температуры ds18b20 не получены:\n");
         printf("UA_STATUSCODE_BADNOTCONNECTED. NOT OPEN FILE\n");
         return UA_STATUSCODE_BADNOTCONNECTED;
     }
