@@ -139,11 +139,12 @@ void tick(UA_Server* server, void* ctx)
         UA_Double hi = loop->valve.outMax;
         if (hi < lo) { UA_Double t = lo; lo = hi; hi = t; } // авто-починка конфигурации
         ctrl = clampd(ctrl, lo, hi);
-        printf("Значение клапана после ограничения clampd: %.2f, ctrl\n", ctrl);
+        printf("Значение клапана после ограничения clampd: %.2f.\n", ctrl);
     }
 
-    printf("Передаем степень открытия клапана %.2f в command и actual pos\n", ctrl);
+    printf("Передаем степень открытия клапана %.2f в command и actual pos.\n", ctrl);
     loop->valve.command = ctrl;
     loop->valve.actual_position = ctrl;
+    printf("Передаем степень открытия клапана %.2f сервоприводу.\n", loop->valve.command);
     actuator_valve_send(loop->valve.command);
 }
