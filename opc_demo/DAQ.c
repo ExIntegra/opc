@@ -84,12 +84,13 @@
 void tick(UA_Server* server, void* ctx)
 {
     if (!server || !ctx) return;
-
+    printf("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+    printf("Запуск функции tick\n");
     UA_Double ctrl;
     ControlLoop* loop = (ControlLoop*)ctx;
 
-    printf("Вызов функции read_ds18b20.\n");
-    read_ds18b20(&loop->sensor.io);
+    //read_ds18b20(&loop->sensor.io);
+    read_ds18b20_test(&loop->sensor.io, 20, 30);
 
     const UA_Double     pv = loop->sensor.io.pv;
     const UA_StatusCode pvSt = loop->sensor.io.st;
@@ -100,12 +101,13 @@ void tick(UA_Server* server, void* ctx)
         printf("Степень открытия клапана в автоматическом управление.\n");
         printf("Вызов функции pidCalculate.\n");
         printf("MODE: AUTO.\n");
-        pidCalculate(&loop->pid);
+        pidCalculate(&loop->pid, loop->valve.outMin, loop->valve.outMax);
         ctrl = loop->pid.output;
     }
     else {
-        ctrl = loop->pid.manualoutput;
-        printf("Степень открытия клапана в ручном управление.\n");
+        ctrl = loop->valve.command;
+        loop->pid.setpoint = loop->sensor.io.pv;
+        printf("Степень открытия клапана в ручном управление (command=%.2f).\n", ctrl);
         printf("MODE: MAN.\n");
     }
 
@@ -142,9 +144,7 @@ void tick(UA_Server* server, void* ctx)
         printf("Значение клапана после ограничения clampd: %.2f.\n", ctrl);
     }
 
-    printf("Передаем степень открытия клапана %.2f в command и actual pos.\n", ctrl);
     loop->valve.command = ctrl;
     loop->valve.actual_position = ctrl;
-    printf("Передаем степень открытия клапана %.2f сервоприводу.\n", loop->valve.command);
     actuator_valve_send(loop->valve.command);
 }
