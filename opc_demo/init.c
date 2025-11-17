@@ -24,13 +24,14 @@ void valve_init(Valve* v) {
 void reactor_init(Reactor* r) {
     r->name = UA_STRING_NULL;
     r->objId = UA_NODEID_NULL;
-    r->volume = 1000.0;
+    r->mixer = UA_TRUE;
+    r->volume = 100;
 }
 
 void valve_handle_control_init(ValveHandleControl* vhc) {
     vhc->name = UA_STRING_NULL;
     vhc->objId = UA_NODEID_NULL;
-    vhc->manualoutput = 0.0;
+    vhc->manualoutput = 50.0;
 }
 
 // Инициализация датчика
@@ -70,6 +71,7 @@ void model_init(ModelCtx* m, Sensor* sensorTemperature, Sensor* sensorF, Sensor*
     m->cfg.k02 = 9.0e15;
     m->cfg.EA1 = 74000.0;
     m->cfg.EA2 = 89000.0;
+    m->substanceId = 1;
 }
 
 // Инициализация ПИД-регулятора
