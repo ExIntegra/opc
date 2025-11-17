@@ -12,6 +12,8 @@ Reactor reactor;
 ValveHandleControl valveRegulationConcentrationA, valveRegulationQ;
 ModelCtx modelCtx;
 Sensor sensorTemperature, sensorConcentrationA, sensorF, sensorConcentrationB;
+UA_UInt64 cbModelId = 10000, cbTickId = 10000;
+
 
 int main(void) {
 
@@ -40,16 +42,19 @@ int main(void) {
 	addValveType(server);         
 	addReactorType(server);        
 	addValveHandleControlType(server);
+	addMathModelType(server);
 
 	UA_NodeId cellFolderId = UA_NODEID_NULL;
 	UA_NodeId REACTORS = UA_NODEID_NULL;
 	UA_NodeId VALVES = UA_NODEID_NULL;
 	UA_NodeId SENSORS = UA_NODEID_NULL;
+	UA_NodeId MODEL = UA_NODEID_NULL;
 
 	opc_ua_create_cell_folder(server, "TRCA1", &cellFolderId);
 	opc_ua_create_cell_folder(server, "Reactors", &REACTORS);
 	opc_ua_create_cell_folder(server, "Valves", &VALVES);
 	opc_ua_create_cell_folder(server, "Sensors", &SENSORS);
+	opc_ua_create_cell_folder(server, "Model", &MODEL);
 
 	opc_ua_create_pid_instance(server, cellFolderId, "PID", &controlLoop.pid);
 	opc_ua_create_sensor_instance(server, cellFolderId, "Sensor", UA_TRUE,&controlLoop.sensor);
@@ -57,13 +62,13 @@ int main(void) {
 	opc_ua_create_sensor_instance(server, SENSORS, "CRA-1", UA_FALSE, &sensorConcentrationA);
 	opc_ua_create_sensor_instance(server, SENSORS, "CRA-2", UA_FALSE, &sensorConcentrationB);
     opc_ua_create_valve_instance(server, cellFolderId, "Valve", &controlLoop.valve);      
-	opc_ua_create_reactor_instance(server, REACTORS, "Reactor", &reactor);
+	opc_ua_create_reactor_instance(server, REACTORS, "1-F", &reactor);
 	opc_ua_create_valve_handle_control(server, VALVES, "HC-1", &valveRegulationConcentrationA);
 	opc_ua_create_valve_handle_control(server, VALVES, "HC-2", &valveRegulationQ);
+	opc_ua_create_math_model_instance(server, MODEL, "Config", &modelCtx);
 
-	UA_UInt64 cbModelId = 10000, cbTickId = 10000;
-	UA_Server_addRepeatedCallback(server, model_cb, &modelCtx, config_dt, &cbModelId);
 	UA_Server_addRepeatedCallback(server, tick, &controlLoop, config_dt, &cbTickId);
+	UA_Server_addRepeatedCallback(server, model_cb, &modelCtx, config_dt, &cbModelId);
 	UA_Server_runUntilInterrupt(server);
 	UA_Server_delete(server);
     return 0;
