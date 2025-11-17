@@ -62,6 +62,7 @@ typedef struct {
 typedef struct {
 	UA_NodeId objId;  // NodeId объекта реактора в адресном пространстве
 	UA_Double volume;
+    UA_Boolean mixer;
 	UA_String name;
 } Reactor;
 
@@ -122,6 +123,7 @@ typedef struct {
         * sensorConcentrationA,
         * sensorConcentrationB;
     ConfigMathModel cfg;
+    UA_UInt32 substanceId;
 	ValveHandleControl* valveRegulationConcentrationA;
 	ValveHandleControl* valveRegulationQ;
 } ModelCtx;
