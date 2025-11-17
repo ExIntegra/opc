@@ -539,6 +539,7 @@ UA_NodeId sensorTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1002 } };
 UA_NodeId valveTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1003 } };
 UA_NodeId reactorTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1004 } };
 UA_NodeId valveHandleControlType = { 1, UA_NODEIDTYPE_NUMERIC, { 1005 } };
+UA_NodeId mathModelTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1006 } };
 
 UA_NodeId addValveHandleControlType(UA_Server* server) {
     UA_ObjectTypeAttributes varAttr = UA_ObjectTypeAttributes_default;
@@ -598,6 +599,18 @@ UA_NodeId addReactorType(UA_Server* server) {
         UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
         nameAttr, NULL, &nameId);
     add_reference_mandatory(server, nameId);
+
+    UA_VariableAttributes mixerAttr = UA_VariableAttributes_default;
+    mixerAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MIXER");
+    mixerAttr.dataType = UA_TYPES[UA_TYPES_BOOLEAN].typeId;
+    mixerAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    UA_NodeId mixerId;
+    UA_Server_addVariableNode(server, UA_NODEID_NULL, reactorTypeId,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+        UA_QUALIFIEDNAME(1, "MIXER"),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+        mixerAttr, NULL, &mixerId);
+    add_reference_mandatory(server, mixerId);
 
     UA_VariableAttributes reactorAttr = UA_VariableAttributes_default;
     reactorAttr.displayName = UA_LOCALIZEDTEXT("en-US", "REACTOR_VOLUME");
@@ -734,7 +747,7 @@ UA_NodeId addValveType(UA_Server* server) {
     UA_VariableAttributes commandAttr = UA_VariableAttributes_default;
     commandAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Command");
     commandAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    commandAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
+    commandAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
     UA_NodeId commandId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, valveTypeId,
         UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
@@ -743,6 +756,79 @@ UA_NodeId addValveType(UA_Server* server) {
         commandAttr, NULL, &commandId);
     add_reference_mandatory(server, commandId);
     return valveTypeId;
+}
+
+UA_NodeId addMathModelType(UA_Server* server) {
+    UA_ObjectTypeAttributes attr = UA_ObjectTypeAttributes_default;
+    attr.displayName = UA_LOCALIZEDTEXT("en-US", "MathModelType");
+    UA_Server_addObjectTypeNode(server,
+        UA_NODEID_NUMERIC(1, 1006),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
+        UA_QUALIFIEDNAME(1, "MathModelType"),
+        attr, NULL, &mathModelTypeId);
+
+    // SUBSTANCE_ID (UInt32 RW)
+    UA_VariableAttributes idAttr = UA_VariableAttributes_default;
+    idAttr.displayName = UA_LOCALIZEDTEXT("en-US", "SUBSTANCE_ID");
+    idAttr.dataType = UA_TYPES[UA_TYPES_UINT32].typeId;
+    idAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    UA_NodeId idNode;
+    UA_Server_addVariableNode(server, UA_NODEID_NULL, mathModelTypeId,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+        UA_QUALIFIEDNAME(1, "SUBSTANCE_ID"),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+        idAttr, NULL, &idNode);
+    add_reference_mandatory(server, idNode);
+
+    UA_VariableAttributes k1Attr = UA_VariableAttributes_default;
+    k1Attr.displayName = UA_LOCALIZEDTEXT("en-US", "K01");
+    k1Attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+    k1Attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    UA_NodeId k1Id;
+    UA_Server_addVariableNode(server, UA_NODEID_NULL, mathModelTypeId,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+        UA_QUALIFIEDNAME(1, "K01"),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+        k1Attr, NULL, &k1Id);
+    add_reference_mandatory(server, k1Id);
+
+	UA_VariableAttributes k2Attr = UA_VariableAttributes_default;
+	k2Attr.displayName = UA_LOCALIZEDTEXT("en-US", "K02");
+	k2Attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+	k2Attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+	UA_NodeId k2Id;
+	UA_Server_addVariableNode(server, UA_NODEID_NULL, mathModelTypeId,
+		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+		UA_QUALIFIEDNAME(1, "K02"),
+		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+		k2Attr, NULL, &k2Id);
+	add_reference_mandatory(server, k2Id);
+
+	UA_VariableAttributes E1Attr = UA_VariableAttributes_default;
+	E1Attr.displayName = UA_LOCALIZEDTEXT("en-US", "EA1");
+	E1Attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+	E1Attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+	UA_NodeId E1Id;
+	UA_Server_addVariableNode(server, UA_NODEID_NULL, mathModelTypeId,
+		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+		UA_QUALIFIEDNAME(1, "EA1"),
+		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+		E1Attr, NULL, &E1Id);
+	add_reference_mandatory(server, E1Id);
+
+	UA_VariableAttributes E2Attr = UA_VariableAttributes_default;
+	E2Attr.displayName = UA_LOCALIZEDTEXT("en-US", "EA2");
+	E2Attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+	E2Attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+	UA_NodeId E2Id;
+	UA_Server_addVariableNode(server, UA_NODEID_NULL, mathModelTypeId,
+		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+		UA_QUALIFIEDNAME(1, "EA2"),
+		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+		E2Attr, NULL, &E2Id);
+	add_reference_mandatory(server, E2Id);
+    return mathModelTypeId;
 }
 
 // Функция для создания типа SensorType
@@ -1083,13 +1169,14 @@ UA_StatusCode opc_ua_create_reactor_instance(UA_Server* server,
     reactor->objId = reactorObjId;
     // Привязываем переменные Reactor из объекта к полям структуры Reactor
     rc = attach_child_double(server, reactorObjId, "REACTOR_VOLUME", &reactor->volume); if (rc) return rc;
+    rc = attach_child_bool(server, reactorObjId, "MIXER", &reactor->mixer);  if (rc) return rc;
+
     return UA_STATUSCODE_GOOD;
 }
 
 UA_StatusCode opc_ua_create_sensor_instance(UA_Server* server,
     UA_NodeId parentFolder, const char* sensorName,
-    UA_Boolean enableAlarms,
-    Sensor* sensor)
+    UA_Boolean enableAlarms, Sensor* sensor)
 {
     /* 1) Создаём объект SENSOR из вашего SensorType */
     UA_NodeId sensorObjId;
@@ -1211,8 +1298,32 @@ UA_StatusCode opc_ua_create_valve_instance(UA_Server* server,
     rc = attach_child_UInt32(server, valveObjId, "actionLL", &valve->actionLL); if (rc) return rc;
     rc = attach_child_double(server, valveObjId, "SafeOutputHH", &valve->safeOutputHH); if (rc) return rc;
     rc = attach_child_double(server, valveObjId, "SafeOutputLL", &valve->safeOutputLL); if (rc) return rc;
-    rc = attach_child_read_only_double(server, valveObjId, "Command", &valve->command); if (rc) return rc;
+    rc = attach_child_double(server, valveObjId, "Command", &valve->command); if (rc) return rc;
 	rc = attach_child_read_only_double(server, valveObjId, "ACTUAL", &valve->actual_position); if (rc) return rc;
+    return UA_STATUSCODE_GOOD;
+}
+
+UA_StatusCode opc_ua_create_math_model_instance(UA_Server* server,
+    UA_NodeId parentFolder, const char* name, ModelCtx* m)
+{
+    UA_NodeId objId;
+    UA_StatusCode rc = UA_Server_addObjectNode(server,
+        UA_NODEID_NULL, parentFolder,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
+        UA_QUALIFIEDNAME(1, (char*)name),
+        mathModelTypeId,
+        UA_ObjectAttributes_default, NULL, &objId);
+    if (rc) return rc;
+
+    // SUBSTANCE_ID → m->substanceId (UInt32 DS)
+    rc = attach_child_UInt32(server, objId, "SUBSTANCE_ID", &m->substanceId); if (rc) return rc;
+
+    // K01,K02,EA1,EA2 → поля m->cfg   (double DS)
+    rc = attach_child_double(server, objId, "K01", &m->cfg.k01); if (rc) return rc;
+    rc = attach_child_double(server, objId, "K02", &m->cfg.k02); if (rc) return rc;
+    rc = attach_child_double(server, objId, "EA1", &m->cfg.EA1); if (rc) return rc;
+    rc = attach_child_double(server, objId, "EA2", &m->cfg.EA2); if (rc) return rc;
+
     return UA_STATUSCODE_GOOD;
 }
 
