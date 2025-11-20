@@ -31,7 +31,7 @@ void reactor_init(Reactor* r) {
 void valve_handle_control_init(ValveHandleControl* vhc) {
     vhc->name = UA_STRING_NULL;
     vhc->objId = UA_NODEID_NULL;
-    vhc->manualoutput = 50.0;
+    vhc->manualoutput = 0.0;
 }
 
 // Инициализация датчика
@@ -58,20 +58,22 @@ void sensor_init(Sensor* s) {
 
 void model_init(ModelCtx* m, Sensor* sensorTemperature, Sensor* sensorF, Sensor* sensorConcentrationA,
     Sensor* sensorConcentrationB, Reactor* reactor, ValveHandleControl* valveRegulationConcentrationA,
-    ValveHandleControl* valveRegulationQ) {
+    ValveHandleControl* valveRegulationQ, ValveHandleControl* valveRegulationT) {
     m->reactor = reactor;
-	m->valveRegulationQ = valveRegulationQ;
+    m->valveRegulationQ = valveRegulationQ;
 	m->valveRegulationConcentrationA = valveRegulationConcentrationA;
-    m->sensorTemperature = sensorTemperature;
+    m->valveRegulationT = valveRegulationT;
+    //m->sensorTemperature = sensorTemperature;
     m->sensorF = sensorF;
     m->sensorConcentrationA = sensorConcentrationA;
     m->sensorConcentrationB = sensorConcentrationB;
+    m->sensorT = sensorTemperature;
     m->cfg.R = 8.314;
-    m->cfg.k01 = 2.0e13;
-    m->cfg.k02 = 9.0e15;
-    m->cfg.EA1 = 74000.0;
-    m->cfg.EA2 = 89000.0;
-    m->substanceId = 1;
+    m->cfg.k01 = 0;
+    m->cfg.k02 = 0;
+    m->cfg.EA1 = 0;
+    m->cfg.EA2 = 0;
+    m->substanceId = 0;
 }
 
 // Инициализация ПИД-регулятора
@@ -84,7 +86,7 @@ void pid_init(PIDControllerType* pid) {
     pid->output = 0.0;
     pid->integral = 0.0;
     pid->lastError = 0.0;
-    pid->setpoint = 70.0;
+    pid->setpoint = 20.0;
     pid->manualoutput = 0.0;
-    pid->mode = UA_TRUE;
+    pid->mode = UA_FALSE;
 }

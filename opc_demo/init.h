@@ -10,4 +10,4 @@ void reactor_init(Reactor* r);
 void valve_handle_control_init(ValveHandleControl* vhc);
 void model_init(ModelCtx* m, Sensor* sensorTemperature, Sensor* sensorF, Sensor* sensorConcentrationA,
 	Sensor* sensorConcentrationB, Reactor* reactor, ValveHandleControl* valveRegulationConcentrationA,
-	ValveHandleControl* valveRegulationQ);
+	ValveHandleControl* valveRegulationQ, ValveHandleControl* valveRegulatoinT);

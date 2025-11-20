@@ -117,15 +117,20 @@ typedef struct {
 
 typedef struct {
     Reactor* reactor;
+    UA_UInt32 substanceId;
+    ConfigMathModel cfg;
+
     Sensor
-        * sensorTemperature,
+        //* sensorTemperature,
         * sensorF,
         * sensorConcentrationA,
-        * sensorConcentrationB;
-    ConfigMathModel cfg;
-    UA_UInt32 substanceId;
-	ValveHandleControl* valveRegulationConcentrationA;
-	ValveHandleControl* valveRegulationQ;
+        * sensorConcentrationB,
+        * sensorT;
+	ValveHandleControl
+        * valveRegulationConcentrationA,
+        * valveRegulationQ,
+        * valveRegulationT;
+
 } ModelCtx;
 
 // Контрольный контур управления

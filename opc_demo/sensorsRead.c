@@ -50,12 +50,13 @@ void read_ds18b20(CashSensor* sensor) {
     }
 }
 
+//функция для имитации чтения температуры с DS18B20
 void read_ds18b20_test(CashSensor* sensor, int minTemp, int maxTemp) {
-    printf("Вызов функции read_ds18b20_test:\n");
+    printf("Вызов функции read_ds18b20_test:");
     srand(time(NULL));
-    int randTemp = minTemp + rand() % (maxTemp - minTemp + 1);
+    int randTemp = (rand() % (maxTemp - minTemp + 1)) + minTemp;
     sensor->pv = (double)randTemp;
     sensor->st = UA_STATUSCODE_GOOD;
-    printf("    DS18B20: %.d C\n", randTemp);
+    printf(" DS18B20: %.d C\n", randTemp);
 
 }
