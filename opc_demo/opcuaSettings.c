@@ -1,10 +1,51 @@
-﻿#include <stdio.h>
+﻿/**
+ * @file opcuaSettings.c
+ * @brief OPC UA address space helpers, custom types and data source callbacks.
+ *
+ * This module wires the C data structures of the process model to the
+ * open62541 OPC UA server address space. It provides:
+ *
+ *   - DataSource callbacks for Double and UInt32 values
+ *     (readDoubleDS, writeDoubleDS, readUInt32DS, writeUInt32DS) to expose
+ *     struct fields as OPC UA variables with custom validation and logging.
+ *
+ *   - Utility functions to locate child variable nodes by browse name and
+ *     bind them to C fields using UA_DataSource:
+ *       * find_child_var()
+ *       * attach_child_double()
+ *       * attach_child_UInt32()
+ *
+ *   - Registration of custom ObjectTypes used by the application:
+ *       * SensorType
+ *       * ReactorType
+ *       * ValveHandleControlType
+ *       * MathModelType
+ *
+ *   - Factory helpers that create instances of these types in the server
+ *     address space and connect them to the corresponding C structures:
+ *       * opc_ua_create_sensor_instance()
+ *       * opc_ua_create_reactor_instance()
+ *       * opc_ua_create_valve_handle_control()
+ *       * opc_ua_create_math_model_instance()
+ *       * opc_ua_create_cell_folder()
+ */
+
+#include <stdio.h>
 #include <math.h>
 #include "opcuaSettings.h"
 #include "types.h"
+#include <open62541/plugin/log_stdout.h>
+#include <open62541/types.h>
+#include <open62541/server.h>
+#include <open62541/server_config_default.h>
 
-/* Функция для чтения данных из узлов (свойства) экземпляра регулятора. Работает
- * с компонентами экземпляра PID (kp, ki, kd, output, setPoint, processValue)*/
+ /**
+  * @brief DataSource read callback for Double variables.
+  *
+  * Reads the Double value from nodeContext, fills UA_DataValue
+  * with scalar value and timestamps, and performs basic range
+  * / index checks.
+  */
 static UA_StatusCode readDoubleDS(UA_Server* server,
     const UA_NodeId* sessionId,
     void* sessionContext,
@@ -31,7 +72,6 @@ static UA_StatusCode readDoubleDS(UA_Server* server,
         return out->status;
     }
 
-    /* читаем значение из nodeContext */
     const UA_Double v = *(const UA_Double*)nodeContext;
 
     UA_StatusCode rv =
@@ -54,14 +94,17 @@ static UA_StatusCode readDoubleDS(UA_Server* server,
 
     out->status = UA_STATUSCODE_GOOD;
     out->hasStatus = true;
-    
+
     return UA_STATUSCODE_GOOD;
 }
 
-
-
-/* Функция для записи данных в узлы (свойства) экземпляра регулятора. Работает
- * с компонентами экземпляра PID (kp, ki, kd, output, setPoint, processValue)*/
+/**
+ * @brief DataSource write callback for Double variables.
+ *
+ * Validates the incoming value (type, rank, finite), writes it
+ * into nodeContext, and logs the new value together with the
+ * node's browse name or numeric NodeId.
+ */
 static UA_StatusCode writeDoubleDS(UA_Server* server,
     const UA_NodeId* sessionId,
     void* sessionContext,
@@ -75,7 +118,6 @@ static UA_StatusCode writeDoubleDS(UA_Server* server,
     (void)sessionContext;
     (void)nodeId;
 
-    //Проверка на валидность данных
     if (!nodeContext)
         return UA_STATUSCODE_BADINTERNALERROR;
 
@@ -95,65 +137,36 @@ static UA_StatusCode writeDoubleDS(UA_Server* server,
     if (!isfinite(v))
         return UA_STATUSCODE_BADOUTOFRANGE;
 
-    /* Записываем по адресу, переданному через nodeContext */
     *(UA_Double*)nodeContext = v;
     if (server && nodeId) {
         UA_QualifiedName bn;
         UA_StatusCode rc = UA_Server_readBrowseName(server, *nodeId, &bn);
         if (rc == UA_STATUSCODE_GOOD) {
-            printf("readDoubleDS: %.*s = %.3f\n",
+            printf("writeDoubleDS: %.*s = %.3f\n",
                 (int)bn.name.length, bn.name.data, v);
             UA_QualifiedName_clear(&bn);
         }
         else {
-            /* fallback: печатаем NodeId, если browseName не прочитали */
             if (nodeId->identifierType == UA_NODEIDTYPE_NUMERIC) {
-                printf("readDoubleDS: ns=%u;i=%u = %.3f\n",
+                printf("writeDoubleDS: ns=%u;i=%u = %.3f\n",
                     nodeId->namespaceIndex,
                     nodeId->identifier.numeric,
                     v);
             }
             else {
-                printf("readDoubleDS: <unknown node> = %.3f\n", v);
+                printf("writeDoubleDS: <unknown node> = % .3f\n", v);
             }
         }
     }
     return UA_STATUSCODE_GOOD;
 }
 
-static UA_StatusCode writeBoolDS(UA_Server* server,
-    const UA_NodeId* sessionId, void* sessionContext,
-    const UA_NodeId* nodeId, void* nodeContext,
-    const UA_NumericRange* range,
-    const UA_DataValue* data) {
-
-    (void)server;
-    (void)sessionId;
-    (void)sessionContext;
-    (void)nodeId;
-
-    if (!nodeContext)
-        return UA_STATUSCODE_BADINTERNALERROR;
-
-    if (!data || !data->hasValue)
-        return UA_STATUSCODE_BADINVALIDARGUMENT;
-
-    if (range && range->dimensionsSize > 0)
-        return UA_STATUSCODE_BADINDEXRANGEINVALID;
-
-    if (data->value.type != &UA_TYPES[UA_TYPES_BOOLEAN] ||
-        data->value.data == NULL ||
-        data->value.arrayLength != 0 ||
-        data->value.arrayDimensionsSize != 0)
-        return UA_STATUSCODE_BADTYPEMISMATCH;
-
-    const UA_Boolean v = *(const UA_Boolean*)data->value.data;
-    /* Для булева ничего не «проверяем на конечность» */
-    *(UA_Boolean*)nodeContext = v;
-    return UA_STATUSCODE_GOOD;
-}
-
-
+/**
+ * @brief DataSource write callback for UInt32 variables.
+ *
+ * Validates the incoming UInt32 value and writes it into
+ * nodeContext. No logging is performed here.
+ */
 static UA_StatusCode writeUInt32DS(UA_Server* server,
     const UA_NodeId* sessionId, void* sessionContext,
     const UA_NodeId* nodeId, void* nodeContext,
@@ -185,6 +198,12 @@ static UA_StatusCode writeUInt32DS(UA_Server* server,
     return UA_STATUSCODE_GOOD;
 }
 
+/**
+ * @brief DataSource read callback for UInt32 variables.
+ *
+ * Reads the UInt32 value from nodeContext, returns it as a
+ * scalar Variant in UA_DataValue and sets timestamps.
+ */
 static UA_StatusCode readUInt32DS(UA_Server* server,
     const UA_NodeId* sessionId,
     void* sessionContext,
@@ -213,7 +232,6 @@ static UA_StatusCode readUInt32DS(UA_Server* server,
         return out->status;
     }
 
-    /* Приводим nodeContext к типу UA_UInt32 и разыменовываем указатель */
     const UA_UInt32 v = *(const UA_UInt32*)nodeContext;
 
     UA_StatusCode rv = UA_Variant_setScalarCopy(&out->value, &v, &UA_TYPES[UA_TYPES_UINT32]);
@@ -238,113 +256,51 @@ static UA_StatusCode readUInt32DS(UA_Server* server,
     return UA_STATUSCODE_GOOD;
 }
 
-static UA_StatusCode readBoolDS(UA_Server* server,
-    const UA_NodeId* sessionId,
-    void* sessionContext,
-    const UA_NodeId* nodeId,
-    void* nodeContext,
-    UA_Boolean includeSourceTimeStamp,
-    const UA_NumericRange* range,
-    UA_DataValue* out) {
-
-    (void)server;
-    (void)sessionId;
-    (void)sessionContext;
-    (void)nodeId;
-
-    UA_DataValue_init(out);
-
-    if (!nodeContext) {
-        out->status = UA_STATUSCODE_BADINTERNALERROR;
-        out->hasStatus = true;
-        return out->status;
-    }
-
-    if (range && range->dimensionsSize > 0) {
-        out->status = UA_STATUSCODE_BADINDEXRANGEINVALID;
-        out->hasStatus = true;
-        return out->status;
-    }
-
-    /* Приодим nodeContext к типу UA_Boolean и разыменовываем указатель */
-    const UA_Boolean v = *(const UA_Boolean*)nodeContext;
-
-    UA_StatusCode rv = UA_Variant_setScalarCopy(&out->value, &v, &UA_TYPES[UA_TYPES_BOOLEAN]);
-    if (rv != UA_STATUSCODE_GOOD) {
-        out->status = rv;
-        out->hasStatus = true;
-        return rv;
-    }
-
-    out->hasValue = true;
-
-    if (includeSourceTimeStamp) {
-        out->sourceTimestamp = UA_DateTime_now();
-        out->hasSourceTimestamp = true;
-    }
-
-    out->serverTimestamp = UA_DateTime_now();
-    out->hasServerTimestamp = true;
-
-    out->status = UA_STATUSCODE_GOOD;
-    out->hasStatus = true;
-    return UA_STATUSCODE_GOOD;
-}
-
-/* Функия для нахождения компонента (cвойства) родителя (экземпляра регулятора) и передача его в nodeId
- * для дальнейше работы с ним.
- * parent - NodeId родителя (объект)
- * browseName - имя искомого компонента родителя
- * out - nodeId найденного комнонента родителя*/
+/**
+ * @brief Finds a child variable node by browse name under a parent node.
+ *
+ * Uses TranslateBrowsePathsToNodeIds with HasComponent to resolve a
+ * single browseName relative to parent and returns the resulting NodeId
+ * in out.
+ */
 static UA_StatusCode find_child_var(UA_Server* server,
     const UA_NodeId parent,
     const char* browseName,
     UA_NodeId* out) {
 
-    //Описываем шаг, по которому пойдет поиск:
-    UA_RelativePathElement rpe; //создаем экземпляр структуры
+    UA_RelativePathElement rpe;
     UA_RelativePathElement_init(&rpe);
-    rpe.referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT); //тип связи родителя и компненнта
-    //Идем вперед от родителя к компоненту.
+    rpe.referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT);
     rpe.isInverse = false;
-    rpe.includeSubtypes = false; //не учитываем подтипы ссылки
-    //Имя цели, к которому идем в поиске.
+    rpe.includeSubtypes = false;
     rpe.targetName = UA_QUALIFIEDNAME(1, (char*)browseName);
-    //Создали шаг и переходим к созаднию маршрута из BrowsePath.
 
-    //Собираем маршрут из  экземпляра структуры BrowsePath , стартуя от parent, передаем маршрут rpe.
-    UA_BrowsePath bp; //экземпляр стурктуры Browsepath
+    UA_BrowsePath bp;
     UA_BrowsePath_init(&bp);
-    bp.startingNode = parent; //откуда начинаем поиск
+    bp.startingNode = parent;
     bp.relativePath.elementsSize = 1;
     bp.relativePath.elements = &rpe;
 
-    //Производим поиск, а UA_BrowsePathResult brp является экземпляром структуры результата поиска.
-    //имеет statrusCode - статус самой операции и targetSize - сколько целей нашли.
     UA_BrowsePathResult bpr = UA_Server_translateBrowsePathToNodeIds(server, &bp);
 
-    //Проверяем результат поска.
     if (bpr.statusCode != UA_STATUSCODE_GOOD || bpr.targetsSize < 1) {
         UA_BrowsePathResult_clear(&bpr);
         return UA_STATUSCODE_BADNOTFOUND;
     }
 
-    /* Берём первый найденный таргет и копируем локальный NodeId */
     UA_StatusCode c = UA_NodeId_copy(&bpr.targets[0].targetId.nodeId, out);
 
-    /* Чистим временные аллокации результата */
     UA_BrowsePathResult_clear(&bpr);
-    ///???
     return (c == UA_STATUSCODE_GOOD) ? UA_STATUSCODE_GOOD : c;
-
 }
 
-/*Функция для связывания nodeContext с найденным узлом
- *с помощью функции findChildVar.
- *parent - родительский узел
- *name - имя искомого узла
- *pid - экземпляр структуры pid
- *field - компонент экземпляра к которому привязывается nodeContext (KP, KI, ...)*/
+/**
+ * @brief Binds a Double field to a child variable node and installs DataSource.
+ *
+ * Resolves the child variable under parent by browse name, sets the
+ * node context pointer to ptrToField, and attaches readDoubleDS /
+ * writeDoubleDS as its DataSource.
+ */
 static UA_StatusCode attach_child_double(UA_Server* server,
     const UA_NodeId parent,
     const char* browseName,
@@ -352,7 +308,6 @@ static UA_StatusCode attach_child_double(UA_Server* server,
 
     UA_NodeId childId = UA_NODEID_NULL;
 
-    //находим узел и передаем его в chilId через указатель:
     UA_StatusCode ret = find_child_var(server, parent, browseName, &childId);
 
     if (ret != UA_STATUSCODE_GOOD) {
@@ -364,107 +319,25 @@ static UA_StatusCode attach_child_double(UA_Server* server,
         return ret;
     }
 
-    // Устанавливаем DataSource.
     UA_DataSource ds;
     ds.read = readDoubleDS;
     ds.write = writeDoubleDS;
 
-    //Привязка DS к узлу. 
     ret = UA_Server_setVariableNode_dataSource(server, childId, ds);
     if (ret != UA_STATUSCODE_GOOD) {
-        UA_Server_setNodeContext(server, childId, NULL); // Убираем контекст в случае ошибки привязки очистки контекста при удаление узла
+        UA_Server_setNodeContext(server, childId, NULL);
         return ret;
     }
     return UA_STATUSCODE_GOOD;
 }
 
-static UA_StatusCode attach_child_read_only_double(UA_Server* server,
-    const UA_NodeId parent,
-    const char* browseName,
-    void* ptrToField) {
-    UA_NodeId childId = UA_NODEID_NULL;
-    //находим узел и передаем его в chilId через указатель:
-    UA_StatusCode ret = find_child_var(server, parent, browseName, &childId);
-    if (ret != UA_STATUSCODE_GOOD) {
-        return ret;
-    }
-    ret = UA_Server_setNodeContext(server, childId, ptrToField);
-    if (ret != UA_STATUSCODE_GOOD) {
-        return ret;
-    }
-    // Устанавливаем DataSource.
-    UA_DataSource ds;
-    ds.read = readDoubleDS;
-    ds.write = NULL; // Только чтение
-    //Привязка DS к узлу. 
-    ret = UA_Server_setVariableNode_dataSource(server, childId, ds);
-    if (ret != UA_STATUSCODE_GOOD) {
-        UA_Server_setNodeContext(server, childId, NULL); // Убираем контекст в случае ошибки привязки очистки контекста при удаление узла
-        return ret;
-    }
-    return UA_STATUSCODE_GOOD;
-}
-
-static UA_StatusCode attach_child_bool(UA_Server* server,
-    const UA_NodeId parent,
-    const char* browseName,
-    void* ptrToField) {
-
-    UA_NodeId childId = UA_NODEID_NULL;
-
-    //находим узел и передаем его в chilId через указатель:
-    UA_StatusCode ret = find_child_var(server, parent, browseName, &childId);
-    if (ret != UA_STATUSCODE_GOOD) {
-        return ret;
-    }
-
-    ret = UA_Server_setNodeContext(server, childId, ptrToField);
-    if (ret != UA_STATUSCODE_GOOD) {
-        return ret;
-    }
-
-    // Устанавливаем DataSource.
-    UA_DataSource ds;
-    ds.read = readBoolDS;
-    ds.write = writeBoolDS;
-
-    //Привязка DS к узлу. 
-    ret = UA_Server_setVariableNode_dataSource(server, childId, ds);
-    if (ret != UA_STATUSCODE_GOOD) {
-        UA_Server_setNodeContext(server, childId, NULL); // Убираем контекст в случае ошибки привязки очистки контекста при удаление узла
-
-        return ret;
-    }
-    return UA_STATUSCODE_GOOD;
-}
-
-static UA_StatusCode attach_child_only_read_bool(UA_Server* server,
-    const UA_NodeId parent,
-    const char* browseName,
-    void* ptrToField) {
-    UA_NodeId childId = UA_NODEID_NULL;
-    //находим узел и передаем его в chilId через указатель:
-    UA_StatusCode ret = find_child_var(server, parent, browseName, &childId);
-    if (ret != UA_STATUSCODE_GOOD) {
-        return ret;
-    }
-    ret = UA_Server_setNodeContext(server, childId, ptrToField);
-    if (ret != UA_STATUSCODE_GOOD) {
-        return ret;
-    }
-    // Устанавливаем DataSource.
-    UA_DataSource ds;
-    ds.read = readBoolDS;
-    ds.write = NULL; // Только чтение
-    //Привязка DS к узлу. 
-    ret = UA_Server_setVariableNode_dataSource(server, childId, ds);
-    if (ret != UA_STATUSCODE_GOOD) {
-        UA_Server_setNodeContext(server, childId, NULL); // Убираем контекст в случае ошибки привязки очистки контекста при удаление узла
-        return ret;
-    }
-    return UA_STATUSCODE_GOOD;
-}
-
+/**
+ * @brief Binds a UInt32 field to a child variable node and installs DataSource.
+ *
+ * Resolves the child variable under parent by browse name, sets the
+ * node context pointer to ptrToField, and attaches readUInt32DS /
+ * writeUInt32DS as its DataSource.
+ */
 static UA_StatusCode attach_child_UInt32(UA_Server* server,
     const UA_NodeId parent,
     const char* browseName,
@@ -472,7 +345,6 @@ static UA_StatusCode attach_child_UInt32(UA_Server* server,
 
     UA_NodeId childId = UA_NODEID_NULL;
 
-    //находим узел и передаем его в chilId через указатель:
     UA_StatusCode ret = find_child_var(server, parent, browseName, &childId);
     if (ret != UA_STATUSCODE_GOOD) {
         return ret;
@@ -483,49 +355,25 @@ static UA_StatusCode attach_child_UInt32(UA_Server* server,
         return ret;
     }
 
-    // Устанавливаем DataSource.
     UA_DataSource ds;
     ds.read = readUInt32DS;
     ds.write = writeUInt32DS;
 
-    //Привязка DS к узлу. 
     ret = UA_Server_setVariableNode_dataSource(server, childId, ds);
     if (ret != UA_STATUSCODE_GOOD) {
-        UA_Server_setNodeContext(server, childId, NULL); // Убираем контекст в случае ошибки привязки очистки контекста при удаление узла
+        UA_Server_setNodeContext(server, childId, NULL);
 
         return ret;
     }
     return UA_STATUSCODE_GOOD;
 }
 
-UA_StatusCode attach_child_only_read_UInt32(UA_Server* server,
-    const UA_NodeId parent,
-    const char* browseName,
-    void* ptrToField) {
-    UA_NodeId childId = UA_NODEID_NULL;
-    //находим узел и передаем его в chilId через указатель:
-    UA_StatusCode ret = find_child_var(server, parent, browseName, &childId);
-    if (ret != UA_STATUSCODE_GOOD) {
-        return ret;
-    }
-    ret = UA_Server_setNodeContext(server, childId, ptrToField);
-    if (ret != UA_STATUSCODE_GOOD) {
-        return ret;
-    }
-    // Устанавливаем DataSource.
-    UA_DataSource ds;
-    ds.read = readUInt32DS;
-    ds.write = NULL; // Только чтение
-    //Привязка DS к узлу. 
-    ret = UA_Server_setVariableNode_dataSource(server, childId, ds);
-    if (ret != UA_STATUSCODE_GOOD) {
-        UA_Server_setNodeContext(server, childId, NULL); // Убираем контекст в случае ошибки привязки очистки контекста при удаление узла
-        return ret;
-    }
-    return UA_STATUSCODE_GOOD;
-}
-    
-    // Функция для добавления обязательных ссылок
+/**
+ * @brief Adds ModellingRule Mandatory reference to a variable node.
+ *
+ * Marks the given node as mandatory component of its type by
+ * adding HasModellingRule -> ModellingRule_Mandatory reference.
+ */
 static UA_StatusCode add_reference_mandatory(UA_Server* server, UA_NodeId nodeId) {
     return UA_Server_addReference(server, nodeId,
         UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
@@ -533,14 +381,17 @@ static UA_StatusCode add_reference_mandatory(UA_Server* server, UA_NodeId nodeId
         true);
 }
 
-// Глобальная переменная для хранения NodeId
-UA_NodeId pidControllerTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1001 } };
 UA_NodeId sensorTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1002 } };
-UA_NodeId valveTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1003 } };
 UA_NodeId reactorTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1004 } };
 UA_NodeId valveHandleControlType = { 1, UA_NODEIDTYPE_NUMERIC, { 1005 } };
 UA_NodeId mathModelTypeId = { 1, UA_NODEIDTYPE_NUMERIC, { 1006 } };
 
+/**
+ * @brief Declares the ValveHandleControlType ObjectType in namespace 1.
+ *
+ * Creates a custom ObjectType with a mandatory Double variable
+ * MANUAL_OUTPUT to represent manual valve position (0–100 %).
+ */
 UA_NodeId addValveHandleControlType(UA_Server* server) {
     UA_ObjectTypeAttributes varAttr = UA_ObjectTypeAttributes_default;
     varAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ValveHandleControlType");
@@ -551,33 +402,26 @@ UA_NodeId addValveHandleControlType(UA_Server* server) {
         UA_QUALIFIEDNAME(1, "ValveHandleControlType"),
         varAttr, NULL, &valveHandleControlType);
 
-	UA_VariableAttributes nameAttr = UA_VariableAttributes_default;
-	nameAttr.displayName = UA_LOCALIZEDTEXT("en-US", "NAME");
-	nameAttr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-	nameAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-	UA_NodeId nameId;
-	UA_Server_addVariableNode(server, UA_NODEID_NULL, valveHandleControlType,
-		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-		UA_QUALIFIEDNAME(1, "NAME"),
-		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-		nameAttr, NULL, &nameId);
-	add_reference_mandatory(server, nameId);
-
-	UA_VariableAttributes manualOutputAttr = UA_VariableAttributes_default;
-	manualOutputAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MANUAL_OUTPUT");
-	manualOutputAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-	manualOutputAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-	UA_NodeId manualOutputId;
-
-	UA_Server_addVariableNode(server, UA_NODEID_NULL, valveHandleControlType,
-		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-		UA_QUALIFIEDNAME(1, "MANUAL_OUTPUT"),
-		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-		manualOutputAttr, NULL, &manualOutputId);
-	add_reference_mandatory(server, manualOutputId);
+    UA_VariableAttributes manualOutputAttr = UA_VariableAttributes_default;
+    manualOutputAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MANUAL_OUTPUT");
+    manualOutputAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+    manualOutputAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    UA_NodeId manualOutputId;
+    UA_Server_addVariableNode(server, UA_NODEID_NULL, valveHandleControlType,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+        UA_QUALIFIEDNAME(1, "MANUAL_OUTPUT"),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+        manualOutputAttr, NULL, &manualOutputId);
+    add_reference_mandatory(server, manualOutputId);
     return valveHandleControlType;
 }
 
+/**
+ * @brief Declares the ReactorType ObjectType in namespace 1.
+ *
+ * Creates a custom ObjectType with a mandatory Double variable
+ * REACTOR_VOLUME to represent reactor volume.
+ */
 UA_NodeId addReactorType(UA_Server* server) {
     UA_ObjectTypeAttributes varAttr = UA_ObjectTypeAttributes_default;
     varAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ReactorType");
@@ -587,30 +431,6 @@ UA_NodeId addReactorType(UA_Server* server) {
         UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
         UA_QUALIFIEDNAME(1, "ReactorType"),
         varAttr, NULL, &reactorTypeId);
-
-    UA_VariableAttributes nameAttr = UA_VariableAttributes_default;
-    nameAttr.displayName = UA_LOCALIZEDTEXT("en-US", "NAME");
-    nameAttr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    nameAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-    UA_NodeId nameId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, reactorTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "NAME"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        nameAttr, NULL, &nameId);
-    add_reference_mandatory(server, nameId);
-
-    UA_VariableAttributes mixerAttr = UA_VariableAttributes_default;
-    mixerAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MIXER");
-    mixerAttr.dataType = UA_TYPES[UA_TYPES_BOOLEAN].typeId;
-    mixerAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId mixerId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, reactorTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "MIXER"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        mixerAttr, NULL, &mixerId);
-    add_reference_mandatory(server, mixerId);
 
     UA_VariableAttributes reactorAttr = UA_VariableAttributes_default;
     reactorAttr.displayName = UA_LOCALIZEDTEXT("en-US", "REACTOR_VOLUME");
@@ -626,138 +446,12 @@ UA_NodeId addReactorType(UA_Server* server) {
     return reactorTypeId;
 }
 
-UA_NodeId addValveType(UA_Server* server) {
-    UA_ObjectTypeAttributes varAttr = UA_ObjectTypeAttributes_default;
-    varAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ValveType");
-    UA_Server_addObjectTypeNode(server,
-        UA_NODEID_NUMERIC(1, 1003),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
-        UA_QUALIFIEDNAME(1, "ValveType"),
-        varAttr, NULL, &valveTypeId);
-
-    UA_VariableAttributes nameAttr = UA_VariableAttributes_default;
-    nameAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Name");
-    nameAttr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    nameAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-    UA_NodeId nameId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, valveTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "Name"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        nameAttr, NULL, &nameId);
-    add_reference_mandatory(server, nameId);
-
-	UA_VariableAttributes actualAttr = UA_VariableAttributes_default;
-	actualAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ACTUAL");
-	actualAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-	actualAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-	UA_NodeId actualId;
-	UA_Server_addVariableNode(server, UA_NODEID_NULL, valveTypeId,
-		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-		UA_QUALIFIEDNAME(1, "ACTUAL"),
-		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-		actualAttr, NULL, &actualId);
-    add_reference_mandatory(server, actualId);
-
-    UA_VariableAttributes clampEnableAttr = UA_VariableAttributes_default;
-    clampEnableAttr.displayName = UA_LOCALIZEDTEXT("en-US", "CLAMP_ENABLE");
-    clampEnableAttr.dataType = UA_TYPES[UA_TYPES_BOOLEAN].typeId;
-    clampEnableAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId clampEnableId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, valveTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "CLAMP_ENABLE"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        clampEnableAttr, NULL, &clampEnableId);
-    add_reference_mandatory(server, clampEnableId);
-
-    UA_VariableAttributes outMaxAttr = UA_VariableAttributes_default;
-    outMaxAttr.displayName = UA_LOCALIZEDTEXT("en-US", "OUTPUT_MAX");
-    outMaxAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    outMaxAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId outMaxId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, valveTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "OUTPUT_MAX"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        outMaxAttr, NULL, &outMaxId);
-    add_reference_mandatory(server, outMaxId);
-
-    UA_VariableAttributes outMinAttr = UA_VariableAttributes_default;
-    outMinAttr.displayName = UA_LOCALIZEDTEXT("en-US", "OUTPUT_MIN");
-    outMinAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    outMinAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId outMinId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, valveTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "OUTPUT_MIN"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        outMinAttr, NULL, &outMinId);
-    add_reference_mandatory(server, outMinId);
-
-    UA_VariableAttributes actionHHAttr = UA_VariableAttributes_default;
-    actionHHAttr.displayName = UA_LOCALIZEDTEXT("en-US", "actionHH");
-    actionHHAttr.dataType = UA_TYPES[UA_TYPES_UINT32].typeId;
-    actionHHAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId actionHHId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, valveTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "actionHH"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        actionHHAttr, NULL, &actionHHId);
-    add_reference_mandatory(server, actionHHId);
-
-    UA_VariableAttributes actionLLAttr = UA_VariableAttributes_default;
-    actionLLAttr.displayName = UA_LOCALIZEDTEXT("en-US", "actionLL");
-    actionLLAttr.dataType = UA_TYPES[UA_TYPES_UINT32].typeId;
-    actionLLAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId actionLLId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, valveTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "actionLL"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        actionLLAttr, NULL, &actionLLId);
-    add_reference_mandatory(server, actionLLId);
-
-    UA_VariableAttributes safeOutputHHAttr = UA_VariableAttributes_default;
-    safeOutputHHAttr.displayName = UA_LOCALIZEDTEXT("en-US", "SafeOutputHH");
-    safeOutputHHAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    safeOutputHHAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId safeOutputHHId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, valveTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "SafeOutputHH"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        safeOutputHHAttr, NULL, &safeOutputHHId);
-    add_reference_mandatory(server, safeOutputHHId);
-
-    UA_VariableAttributes safeOutputLLAttr = UA_VariableAttributes_default;
-    safeOutputLLAttr.displayName = UA_LOCALIZEDTEXT("en-US", "SafeOutputLL");
-    safeOutputLLAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    safeOutputLLAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId safeOutputLLId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, valveTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "SafeOutputLL"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        safeOutputLLAttr, NULL, &safeOutputLLId);
-    add_reference_mandatory(server, safeOutputLLId);
-
-    UA_VariableAttributes commandAttr = UA_VariableAttributes_default;
-    commandAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Command");
-    commandAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    commandAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId commandId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, valveTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "Command"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        commandAttr, NULL, &commandId);
-    add_reference_mandatory(server, commandId);
-    return valveTypeId;
-}
-
+/**
+ * @brief Declares the MathModelType ObjectType in namespace 1.
+ *
+ * Creates a custom ObjectType for kinetic model configuration with
+ * variables: SUBSTANCE_ID, K01, K02, EA1, EA2.
+ */
 UA_NodeId addMathModelType(UA_Server* server) {
     UA_ObjectTypeAttributes attr = UA_ObjectTypeAttributes_default;
     attr.displayName = UA_LOCALIZEDTEXT("en-US", "MathModelType");
@@ -768,7 +462,6 @@ UA_NodeId addMathModelType(UA_Server* server) {
         UA_QUALIFIEDNAME(1, "MathModelType"),
         attr, NULL, &mathModelTypeId);
 
-    // SUBSTANCE_ID (UInt32 RW)
     UA_VariableAttributes idAttr = UA_VariableAttributes_default;
     idAttr.displayName = UA_LOCALIZEDTEXT("en-US", "SUBSTANCE_ID");
     idAttr.dataType = UA_TYPES[UA_TYPES_UINT32].typeId;
@@ -793,45 +486,50 @@ UA_NodeId addMathModelType(UA_Server* server) {
         k1Attr, NULL, &k1Id);
     add_reference_mandatory(server, k1Id);
 
-	UA_VariableAttributes k2Attr = UA_VariableAttributes_default;
-	k2Attr.displayName = UA_LOCALIZEDTEXT("en-US", "K02");
-	k2Attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-	k2Attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-	UA_NodeId k2Id;
-	UA_Server_addVariableNode(server, UA_NODEID_NULL, mathModelTypeId,
-		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-		UA_QUALIFIEDNAME(1, "K02"),
-		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-		k2Attr, NULL, &k2Id);
-	add_reference_mandatory(server, k2Id);
+    UA_VariableAttributes k2Attr = UA_VariableAttributes_default;
+    k2Attr.displayName = UA_LOCALIZEDTEXT("en-US", "K02");
+    k2Attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+    k2Attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    UA_NodeId k2Id;
+    UA_Server_addVariableNode(server, UA_NODEID_NULL, mathModelTypeId,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+        UA_QUALIFIEDNAME(1, "K02"),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+        k2Attr, NULL, &k2Id);
+    add_reference_mandatory(server, k2Id);
 
-	UA_VariableAttributes E1Attr = UA_VariableAttributes_default;
-	E1Attr.displayName = UA_LOCALIZEDTEXT("en-US", "EA1");
-	E1Attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-	E1Attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-	UA_NodeId E1Id;
-	UA_Server_addVariableNode(server, UA_NODEID_NULL, mathModelTypeId,
-		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-		UA_QUALIFIEDNAME(1, "EA1"),
-		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-		E1Attr, NULL, &E1Id);
-	add_reference_mandatory(server, E1Id);
+    UA_VariableAttributes E1Attr = UA_VariableAttributes_default;
+    E1Attr.displayName = UA_LOCALIZEDTEXT("en-US", "EA1");
+    E1Attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+    E1Attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    UA_NodeId E1Id;
+    UA_Server_addVariableNode(server, UA_NODEID_NULL, mathModelTypeId,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+        UA_QUALIFIEDNAME(1, "EA1"),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+        E1Attr, NULL, &E1Id);
+    add_reference_mandatory(server, E1Id);
 
-	UA_VariableAttributes E2Attr = UA_VariableAttributes_default;
-	E2Attr.displayName = UA_LOCALIZEDTEXT("en-US", "EA2");
-	E2Attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-	E2Attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-	UA_NodeId E2Id;
-	UA_Server_addVariableNode(server, UA_NODEID_NULL, mathModelTypeId,
-		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-		UA_QUALIFIEDNAME(1, "EA2"),
-		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-		E2Attr, NULL, &E2Id);
-	add_reference_mandatory(server, E2Id);
+    UA_VariableAttributes E2Attr = UA_VariableAttributes_default;
+    E2Attr.displayName = UA_LOCALIZEDTEXT("en-US", "EA2");
+    E2Attr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
+    E2Attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    UA_NodeId E2Id;
+    UA_Server_addVariableNode(server, UA_NODEID_NULL, mathModelTypeId,
+        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+        UA_QUALIFIEDNAME(1, "EA2"),
+        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
+        E2Attr, NULL, &E2Id);
+    add_reference_mandatory(server, E2Id);
     return mathModelTypeId;
 }
 
-// Функция для создания типа SensorType
+/**
+ * @brief Declares the SensorType ObjectType in namespace 1.
+ *
+ * Creates a custom ObjectType with a mandatory Double variable
+ * PROCESS_VALUE to represent the measured value.
+ */
 UA_NodeId addSensorType(UA_Server* server) {
     UA_ObjectTypeAttributes varAttr = UA_ObjectTypeAttributes_default;
     varAttr.displayName = UA_LOCALIZEDTEXT("en-US", "SensorType");
@@ -853,260 +551,26 @@ UA_NodeId addSensorType(UA_Server* server) {
         UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
         pvAttr, NULL, &pvId);
     add_reference_mandatory(server, pvId);
-
-    UA_VariableAttributes lowAttr = UA_VariableAttributes_default;
-    lowAttr.displayName = UA_LOCALIZEDTEXT("en-US", "SET_LOW");
-    lowAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    lowAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId lowId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, sensorTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "SET_LOW"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        lowAttr, NULL, &lowId);
-    add_reference_mandatory(server, lowId);
-
-    UA_VariableAttributes highAttr = UA_VariableAttributes_default;
-    highAttr.displayName = UA_LOCALIZEDTEXT("en-US", "SET_HIGH");
-    highAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    highAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId highId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, sensorTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "SET_HIGH"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        highAttr, NULL, &highId);
-    add_reference_mandatory(server, highId);
-
-    UA_VariableAttributes lowLowAttr = UA_VariableAttributes_default;
-    lowLowAttr.displayName = UA_LOCALIZEDTEXT("en-US", "SET_LOW_LOW");
-    lowLowAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    lowLowAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId lowLowId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, sensorTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "SET_LOW_LOW"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        lowLowAttr, NULL, &lowLowId);
-    add_reference_mandatory(server, lowLowId);
-
-    UA_VariableAttributes highHighAttr = UA_VariableAttributes_default;
-    highHighAttr.displayName = UA_LOCALIZEDTEXT("en-US", "SET_HIGH_HIGH");
-    highHighAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    highHighAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId highHighId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, sensorTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "SET_HIGH_HIGH"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        highHighAttr, NULL, &highHighId);
-    add_reference_mandatory(server, highHighId);
-
-    UA_VariableAttributes hysteresisAttr = UA_VariableAttributes_default;
-    hysteresisAttr.displayName = UA_LOCALIZEDTEXT("en-US", "HYSTERESIS");
-    hysteresisAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    hysteresisAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId hysteresisId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, sensorTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "HYSTERESIS"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        hysteresisAttr, NULL, &hysteresisId);
-    add_reference_mandatory(server, hysteresisId);
-
-	UA_VariableAttributes alarmLowAttr = UA_VariableAttributes_default;
-	alarmLowAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ALARM_LOW");
-	alarmLowAttr.dataType = UA_TYPES[UA_TYPES_BOOLEAN].typeId;
-	alarmLowAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-	UA_NodeId alarmLowId;
-	UA_Server_addVariableNode(server, UA_NODEID_NULL, sensorTypeId,
-		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-		UA_QUALIFIEDNAME(1, "ALARM_LOW"),
-		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-		alarmLowAttr, NULL, &alarmLowId);
-    add_reference_mandatory(server, alarmLowId);
-
-	UA_VariableAttributes alarmHighAttr = UA_VariableAttributes_default;
-	alarmHighAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ALARM_HIGH");
-	alarmHighAttr.dataType = UA_TYPES[UA_TYPES_BOOLEAN].typeId;
-	alarmHighAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-	UA_NodeId alarmHighId;
-	UA_Server_addVariableNode(server, UA_NODEID_NULL, sensorTypeId,
-		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-		UA_QUALIFIEDNAME(1, "ALARM_HIGH"),
-		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-		alarmHighAttr, NULL, &alarmHighId);
-    add_reference_mandatory(server, alarmHighId);
-
-	UA_VariableAttributes alarmLowLowAttr = UA_VariableAttributes_default;
-	alarmLowLowAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ALARM_LOW_LOW");
-	alarmLowLowAttr.dataType = UA_TYPES[UA_TYPES_BOOLEAN].typeId;
-	alarmLowLowAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-	UA_NodeId alarmLowLowId;
-	UA_Server_addVariableNode(server, UA_NODEID_NULL, sensorTypeId,
-		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-		UA_QUALIFIEDNAME(1, "ALARM_LOW_LOW"),
-		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-		alarmLowLowAttr, NULL, &alarmLowLowId);
-    add_reference_mandatory(server, alarmLowLowId);
-
-	UA_VariableAttributes alarmHighHighAttr = UA_VariableAttributes_default;
-	alarmHighHighAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ALARM_HIGH_HIGH");
-	alarmHighHighAttr.dataType = UA_TYPES[UA_TYPES_BOOLEAN].typeId;
-	alarmHighHighAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-	UA_NodeId alarmHighHighId;
-	UA_Server_addVariableNode(server, UA_NODEID_NULL, sensorTypeId,
-		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-		UA_QUALIFIEDNAME(1, "ALARM_HIGH_HIGH"),
-		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-		alarmHighHighAttr, NULL, &alarmHighHighId);
-    add_reference_mandatory(server, alarmHighHighId);
-
-	UA_VariableAttributes statusAttr = UA_VariableAttributes_default;
-	statusAttr.displayName = UA_LOCALIZEDTEXT("en-US", "STATUS");
-	statusAttr.dataType = UA_TYPES[UA_TYPES_UINT32].typeId;
-	statusAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-	UA_NodeId statusId;
-	UA_Server_addVariableNode(server, UA_NODEID_NULL, sensorTypeId,
-		UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-		UA_QUALIFIEDNAME(1, "STATUS"),
-		UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-		statusAttr, NULL, &statusId);
-    add_reference_mandatory(server, statusId);
     return sensorTypeId;
 }
 
-// Функция для создания типа PIDControllerType
-UA_NodeId addPIDControllerType(UA_Server* server) {
-    UA_ObjectTypeAttributes varAttr = UA_ObjectTypeAttributes_default;
-    varAttr.displayName = UA_LOCALIZEDTEXT("en-US", "PIDControllerType");
-    UA_Server_addObjectTypeNode(server,
-        UA_NODEID_NUMERIC(1, 1001),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
-        UA_QUALIFIEDNAME(1, "PIDControllerType"),
-        varAttr, NULL, &pidControllerTypeId);
-
-    UA_VariableAttributes nmAttr = UA_VariableAttributes_default;
-    nmAttr.displayName = UA_LOCALIZEDTEXT("en-US", "PIDName");
-    nmAttr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    nmAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-    UA_NodeId pidNameId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "PIDName"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        nmAttr, NULL, &pidNameId);
-    add_reference_mandatory(server, pidNameId);
-
-    UA_VariableAttributes kpAttr = UA_VariableAttributes_default;
-    kpAttr.displayName = UA_LOCALIZEDTEXT("en-US", "KP");
-    kpAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    kpAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId kpId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "KP"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        kpAttr, NULL, &kpId);
-    add_reference_mandatory(server, kpId);
-
-    UA_VariableAttributes kiAttr = UA_VariableAttributes_default;
-    kiAttr.displayName = UA_LOCALIZEDTEXT("en-US", "KI");
-    kiAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    kiAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId kiId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "KI"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        kiAttr, NULL, &kiId);
-    add_reference_mandatory(server, kiId);
-
-    UA_VariableAttributes kdAttr = UA_VariableAttributes_default;
-    kdAttr.displayName = UA_LOCALIZEDTEXT("en-US", "KD");
-    kdAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    kdAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId kdId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "KD"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        kdAttr, NULL, &kdId);
-    add_reference_mandatory(server, kdId);
-
-    UA_VariableAttributes outputAttr = UA_VariableAttributes_default;
-    outputAttr.displayName = UA_LOCALIZEDTEXT("en-US", "OUTPUT");
-    outputAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    outputAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-    UA_NodeId outputId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "OUTPUT"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        outputAttr, NULL, &outputId);
-    add_reference_mandatory(server, outputId);
-
-    UA_VariableAttributes manualOutputAttr = UA_VariableAttributes_default;
-    manualOutputAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MANUAL_OUTPUT");
-    manualOutputAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    manualOutputAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId manualOutputValueId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "MANUAL_OUTPUT"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        manualOutputAttr, NULL, &manualOutputValueId);
-    add_reference_mandatory(server, manualOutputValueId);
-
-    UA_VariableAttributes setPointAttr = UA_VariableAttributes_default;
-    setPointAttr.displayName = UA_LOCALIZEDTEXT("en-US", "SET_POINT");
-    setPointAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    setPointAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId setPointId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "SET_POINT"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        setPointAttr, NULL, &setPointId);
-    add_reference_mandatory(server, setPointId);
-
-    UA_VariableAttributes processValueAttr = UA_VariableAttributes_default;
-    processValueAttr.displayName = UA_LOCALIZEDTEXT("en-US", "PROCESS_VALUE");
-    processValueAttr.dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
-    processValueAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-    UA_NodeId processValueId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "PROCESS_VALUE"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        processValueAttr, NULL, &processValueId);
-    add_reference_mandatory(server, processValueId);
-
-    UA_VariableAttributes modeAttr = UA_VariableAttributes_default;
-    modeAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MODE");
-    modeAttr.dataType = UA_TYPES[UA_TYPES_BOOLEAN].typeId;
-    modeAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_NodeId modeId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, pidControllerTypeId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        UA_QUALIFIEDNAME(1, "MODE"),
-        UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
-        modeAttr, NULL, &modeId);
-    add_reference_mandatory(server, modeId);
-    return pidControllerTypeId;
-}
-
+/**
+ * @brief Creates a ValveHandleControl instance object and binds MANUAL_OUTPUT.
+ *
+ * Adds an Object of type ValveHandleControlType under parentFolder,
+ * stores its NodeId into valveHandleControl->objId and attaches the
+ * MANUAL_OUTPUT variable to valveHandleControl->manualoutput.
+ */
 UA_StatusCode opc_ua_create_valve_handle_control(UA_Server* server,
     UA_NodeId parentFolder, const char* valveHandleControlName, ValveHandleControl* valveHandleControl) {
     UA_NodeId valveHandleControlObjId;
     UA_StatusCode rc = UA_Server_addObjectNode(server,
-        UA_NODEID_NULL,           // Генерация ID
+        UA_NODEID_NULL,
         parentFolder,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),       // Тип связи (Optional)
-        UA_QUALIFIEDNAME(1, (char*)valveHandleControlName),    // Имя клапана (например Valve1)
-        valveHandleControlType,      // Тип объекта ValveHandleControlType
-        UA_ObjectAttributes_default, NULL, &valveHandleControlObjId);  // Атрибуты по умолчанию
+        UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
+        UA_QUALIFIEDNAME(1, (char*)valveHandleControlName),
+        valveHandleControlType,
+        UA_ObjectAttributes_default, NULL, &valveHandleControlObjId);
     if (rc != UA_STATUSCODE_GOOD) {
         printf("Failed to add object valve handle control %s\n", valveHandleControlName);
         return rc;
@@ -1115,50 +579,27 @@ UA_StatusCode opc_ua_create_valve_handle_control(UA_Server* server,
         printf("Valve Handle Control %s created successfully\n", valveHandleControlName);
     }
     valveHandleControl->objId = valveHandleControlObjId;
-    // Привязываем переменные ValveHandleControl из объекта к полям структуры ValveHandleControl
     rc = attach_child_double(server, valveHandleControlObjId, "MANUAL_OUTPUT", &valveHandleControl->manualoutput); if (rc) return rc;
     return UA_STATUSCODE_GOOD;
 }
 
-/* --- Функция для создания объекта PID из типа PIDControllerType --- */
-UA_StatusCode opc_ua_create_pid_instance(UA_Server* server, UA_NodeId parentFolder ,const char* pidName, PIDControllerType* pid) {
-    UA_NodeId pidObjId;
-    UA_StatusCode rc = UA_Server_addObjectNode(server,
-        UA_NODEID_NULL,           // Генерация IПD
-        parentFolder,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),       // Тип связи (Optional)
-        UA_QUALIFIEDNAME(1, (char*)pidName),            // Имя PID (например PID1)
-        pidControllerTypeId,                            // Тип объекта PIDControllerType
-        UA_ObjectAttributes_default, NULL, &pidObjId);  // Атрибуты по умолчанию
-
-    if (rc != UA_STATUSCODE_GOOD) {
-        printf("Failed to add object PID %s\n", pidName);
-        return rc;
-    }
-    else {
-		printf("PID %s created successfully\n", pidName);
-    }
-    rc = attach_child_double(server, pidObjId, "KP", &pid->kp); if (rc) return rc;
-    rc = attach_child_double(server, pidObjId, "KI", &pid->ki); if (rc) return rc;
-    rc = attach_child_double(server, pidObjId, "KD", &pid->kd); if (rc) return rc;
-    rc = attach_child_double(server, pidObjId, "SET_POINT", &pid->setpoint); if (rc) return rc;
-    rc = attach_child_double(server, pidObjId, "PROCESS_VALUE", &pid->processvalue); if (rc) return rc;
-    rc = attach_child_read_only_double(server, pidObjId, "OUTPUT", &pid->output); if (rc) return rc;
-    rc = attach_child_double(server, pidObjId, "MANUAL_OUTPUT", &pid->manualoutput); if (rc) return rc;
-    rc = attach_child_bool(server, pidObjId, "MODE", &pid->mode); if (rc) return rc;
-    return UA_STATUSCODE_GOOD;
-}
-
+/**
+ * @brief Creates a Reactor instance object and binds REACTOR_VOLUME.
+ *
+ * Adds an Object of type ReactorType under parentFolder, stores its
+ * NodeId into reactor->objId and attaches the REACTOR_VOLUME variable
+ * to reactor->volume.
+ */
 UA_StatusCode opc_ua_create_reactor_instance(UA_Server* server,
-    UA_NodeId parentFolder ,const char* reactorName, Reactor* reactor) {
+    UA_NodeId parentFolder, const char* reactorName, Reactor* reactor) {
     UA_NodeId reactorObjId;
     UA_StatusCode rc = UA_Server_addObjectNode(server,
-        UA_NODEID_NULL,           // Генерация ID
+        UA_NODEID_NULL,
         parentFolder,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),       // Тип связи (Optional)
-        UA_QUALIFIEDNAME(1, (char*)reactorName),    // Имя реактора (например Reactor1)
-        reactorTypeId,      // Тип объекта ReactorType
-        UA_ObjectAttributes_default, NULL, &reactorObjId);  // Атрибуты по умолчанию
+        UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
+        UA_QUALIFIEDNAME(1, (char*)reactorName),
+        reactorTypeId,
+        UA_ObjectAttributes_default, NULL, &reactorObjId);
     if (rc != UA_STATUSCODE_GOOD) {
         printf("Failed to add object reactor %s\n", reactorName);
         return rc;
@@ -1167,25 +608,30 @@ UA_StatusCode opc_ua_create_reactor_instance(UA_Server* server,
         printf("Reactor %s created successfully\n", reactorName);
     }
     reactor->objId = reactorObjId;
-    // Привязываем переменные Reactor из объекта к полям структуры Reactor
     rc = attach_child_double(server, reactorObjId, "REACTOR_VOLUME", &reactor->volume); if (rc) return rc;
-    rc = attach_child_bool(server, reactorObjId, "MIXER", &reactor->mixer);  if (rc) return rc;
-
     return UA_STATUSCODE_GOOD;
 }
 
+/**
+ * @brief Creates a Sensor instance object and binds PROCESS_VALUE.
+ *
+ * Adds an Object of type SensorType under parentFolder, stores its
+ * NodeId into sensor->objId and attaches the PROCESS_VALUE variable
+ * to sensor->pv.
+ */
 UA_StatusCode opc_ua_create_sensor_instance(UA_Server* server,
     UA_NodeId parentFolder, const char* sensorName,
     UA_Boolean enableAlarms, Sensor* sensor)
 {
-    /* 1) Создаём объект SENSOR из вашего SensorType */
+    (void)enableAlarms; /* alarms not used in this version */
+
     UA_NodeId sensorObjId;
     UA_StatusCode rc = UA_Server_addObjectNode(server,
         UA_NODEID_NULL,
         parentFolder,
         UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
         UA_QUALIFIEDNAME(1, (char*)sensorName),
-        sensorTypeId, /* ваш тип */
+        sensorTypeId,
         UA_ObjectAttributes_default, NULL, &sensorObjId);
     if (rc != UA_STATUSCODE_GOOD) {
         printf("Failed to add object sensor %s\n", sensorName);
@@ -1196,113 +642,18 @@ UA_StatusCode opc_ua_create_sensor_instance(UA_Server* server,
     }
 
     sensor->objId = sensorObjId;
-    sensor->alarmConditionId = UA_NODEID_NULL;
-    sensor->alarmsEnabled = enableAlarms;
 
-    /* 2) Привязываем переменные SENSOR к полям структуры */
-    rc = attach_child_double(server, sensorObjId, "PROCESS_VALUE", &sensor->io.pv);            if (rc) return rc;
-    rc = attach_child_double(server, sensorObjId, "SET_LOW", &sensor->limits.low);             if (rc) return rc;
-    rc = attach_child_double(server, sensorObjId, "SET_HIGH", &sensor->limits.high);           if (rc) return rc;
-    rc = attach_child_double(server, sensorObjId, "SET_LOW_LOW", &sensor->limits.lowLow);      if (rc) return rc;
-    rc = attach_child_double(server, sensorObjId, "SET_HIGH_HIGH", &sensor->limits.highHigh);  if (rc) return rc;
-    rc = attach_child_UInt32(server, sensorObjId, "STATUS", &sensor->io.st);                   if (rc) return rc;
-    rc = attach_child_double(server, sensorObjId, "HYSTERESIS", &sensor->limits.hysteresis);   if (rc) return rc;
-    rc = attach_child_bool(server, sensorObjId, "ALARM_LOW", &sensor->state.low);              if (rc) return rc;
-    rc = attach_child_bool(server, sensorObjId, "ALARM_HIGH", &sensor->state.high);            if (rc) return rc;
-    rc = attach_child_bool(server, sensorObjId, "ALARM_LOW_LOW", &sensor->state.lowLow);       if (rc) return rc;
-    rc = attach_child_bool(server, sensorObjId, "ALARM_HIGH_HIGH", &sensor->state.highHigh);   if (rc) return rc;
-
-    /* 3) Если тревоги не нужны — выходим */
-    if (!enableAlarms) {
-        /* на всякий случай глушим события у узла сенсора */
-        UA_Byte ev = 0;
-        (void)UA_Server_writeEventNotifier(server, sensorObjId, ev);
-        sensor->alarmConditionId = UA_NODEID_NULL;
-        return UA_STATUSCODE_GOOD;
-    }
-
-    /* 4) Создаём Condition NonExclusiveLimitAlarmType как дочерний узел сенсора */
-    UA_StatusCode rcA = UA_Server_createCondition(
-        server,
-        UA_NODEID_NULL,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_NONEXCLUSIVELIMITALARMTYPE),
-        UA_QUALIFIEDNAME(1, "PV_LimitAlarm"),
-        sensorObjId,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-        &sensor->alarmConditionId);
-
-    if (rcA != UA_STATUSCODE_GOOD) {
-        printf("CreateCondition failed: %s\n", UA_StatusCode_name(rcA));
-        sensor->alarmConditionId = UA_NODEID_NULL; /* продолжаем без тревог */
-        return UA_STATUSCODE_GOOD;
-    }
-
-    /* 5) Включаем Condition: EnabledState/Id = true */
-    {
-        UA_Boolean en = UA_TRUE;
-        UA_Variant v; UA_Variant_setScalar(&v, &en, &UA_TYPES[UA_TYPES_BOOLEAN]);
-        (void)UA_Server_setConditionVariableFieldProperty(
-            server, sensor->alarmConditionId, &v,
-            UA_QUALIFIEDNAME(0, "EnabledState"),
-            UA_QUALIFIEDNAME(0, "Id"));
-    }
-
-    /* 6) Retain = true и SourceNode = SENSOR */
-    {
-        UA_Boolean retain = UA_TRUE;
-        UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
-            UA_QUALIFIEDNAME(0, "Retain"), &retain, &UA_TYPES[UA_TYPES_BOOLEAN]);
-
-        UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
-            UA_QUALIFIEDNAME(0, "SourceNode"), &sensorObjId, &UA_TYPES[UA_TYPES_NODEID]);
-    }
-
-    /* 7) Инициализируем лимиты для LimitAlarm */
-    UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
-        UA_QUALIFIEDNAME(0, "HighLimit"), &sensor->limits.high, &UA_TYPES[UA_TYPES_DOUBLE]);
-    UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
-        UA_QUALIFIEDNAME(0, "HighHighLimit"), &sensor->limits.highHigh, &UA_TYPES[UA_TYPES_DOUBLE]);
-    UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
-        UA_QUALIFIEDNAME(0, "LowLimit"), &sensor->limits.low, &UA_TYPES[UA_TYPES_DOUBLE]);
-    UA_Server_writeObjectProperty_scalar(server, sensor->alarmConditionId,
-        UA_QUALIFIEDNAME(0, "LowLowLimit"), &sensor->limits.lowLow, &UA_TYPES[UA_TYPES_DOUBLE]);
-
+    rc = attach_child_double(server, sensorObjId, "PROCESS_VALUE", &sensor->pv); if (rc) return rc;
     return UA_STATUSCODE_GOOD;
 }
 
-
-UA_StatusCode opc_ua_create_valve_instance(UA_Server* server,
-    UA_NodeId parentFolder ,const char* valveName, Valve* valve) {
-    UA_NodeId valveObjId;
-    UA_StatusCode rc = UA_Server_addObjectNode(server,
-        UA_NODEID_NULL,           // Генерация ID
-        parentFolder,
-        UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),       // Тип связи (Optional)
-        UA_QUALIFIEDNAME(1, (char*)valveName),    // Имя клапана (например Valve1)
-        valveTypeId,      // Тип объекта ValveType
-        UA_ObjectAttributes_default, NULL, &valveObjId);  // Атрибуты по умолчанию
-
-    if (rc != UA_STATUSCODE_GOOD) {
-        printf("Failed to add object Valve %s\n", valveName);
-        return rc;
-    }
-    else {
-		printf("Valve %s created successfully\n", valveName);
-		valve->objId = valveObjId;
-    }
-    /* Привязываем переменные Valve из объекта к полям структуры CashValve */
-    rc = attach_child_bool(server, valveObjId, "CLAMP_ENABLE", &valve->clampEnable); if (rc) return rc;
-    rc = attach_child_double(server, valveObjId, "OUTPUT_MAX", &valve->outMax); if (rc) return rc;
-    rc = attach_child_double(server, valveObjId, "OUTPUT_MIN", &valve->outMin); if (rc) return rc;
-    rc = attach_child_UInt32(server, valveObjId, "actionHH", &valve->actionHH); if (rc) return rc;
-    rc = attach_child_UInt32(server, valveObjId, "actionLL", &valve->actionLL); if (rc) return rc;
-    rc = attach_child_double(server, valveObjId, "SafeOutputHH", &valve->safeOutputHH); if (rc) return rc;
-    rc = attach_child_double(server, valveObjId, "SafeOutputLL", &valve->safeOutputLL); if (rc) return rc;
-    rc = attach_child_double(server, valveObjId, "Command", &valve->command); if (rc) return rc;
-	rc = attach_child_read_only_double(server, valveObjId, "ACTUAL", &valve->actual_position); if (rc) return rc;
-    return UA_STATUSCODE_GOOD;
-}
-
+/**
+ * @brief Creates a MathModelType instance and binds configuration fields.
+ *
+ * Adds an Object of type MathModelType under parentFolder and binds
+ * SUBSTANCE_ID, K01, K02, EA1, EA2 to the corresponding fields in
+ * the ModelCtx structure.
+ */
 UA_StatusCode opc_ua_create_math_model_instance(UA_Server* server,
     UA_NodeId parentFolder, const char* name, ModelCtx* m)
 {
@@ -1315,10 +666,7 @@ UA_StatusCode opc_ua_create_math_model_instance(UA_Server* server,
         UA_ObjectAttributes_default, NULL, &objId);
     if (rc) return rc;
 
-    // SUBSTANCE_ID → m->substanceId (UInt32 DS)
     rc = attach_child_UInt32(server, objId, "SUBSTANCE_ID", &m->substanceId); if (rc) return rc;
-
-    // K01,K02,EA1,EA2 → поля m->cfg   (double DS)
     rc = attach_child_double(server, objId, "K01", &m->cfg.k01); if (rc) return rc;
     rc = attach_child_double(server, objId, "K02", &m->cfg.k02); if (rc) return rc;
     rc = attach_child_double(server, objId, "EA1", &m->cfg.EA1); if (rc) return rc;
@@ -1327,7 +675,12 @@ UA_StatusCode opc_ua_create_math_model_instance(UA_Server* server,
     return UA_STATUSCODE_GOOD;
 }
 
-// --- Функция для создания папки (folder) для ячейки (cell) в адресном пространстве OPC UA --- //
+/**
+ * @brief Creates a top-level folder under Objects for grouping instances.
+ *
+ * Adds a FolderType object with the given name under ObjectsFolder
+ * and returns its NodeId in outFolderId.
+ */
 UA_StatusCode opc_ua_create_cell_folder(UA_Server* server,
     const char* cellName,
     UA_NodeId* outFolderId) {
